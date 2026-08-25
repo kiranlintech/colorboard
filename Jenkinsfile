@@ -33,10 +33,10 @@ pipeline {
          * APPLICATION
          * ===================================================== */
 
-        APP_NAME = 'rudram'
+        APP_NAME = 'colorboard'
 
         /* Docker Hub repository */
-        IMAGE_NAME = 'kiranlintech/rudram'
+        IMAGE_NAME = 'kiranlintech/colorboard'
 
         /* Dockerfile */
         DOCKERFILE = 'docker/Dockerfile'
@@ -49,7 +49,7 @@ pipeline {
         HOMELAB_HOST = '192.168.5.9'
         VPS_HOST     = '213.210.37.106'
 
-        SSH_CREDENTIALS = 'rudram-deploy-ssh'
+        SSH_CREDENTIALS = 'vps-ssh-key'
 
 
         /* =====================================================
@@ -57,8 +57,8 @@ pipeline {
          * ===================================================== */
 
         SONAR_SERVER = 'sonarqube'
-        SONAR_PROJECT_KEY = 'rudram'
-        SONAR_PROJECT_NAME = 'Rudram'
+        SONAR_PROJECT_KEY = 'colorboard'
+        SONAR_PROJECT_NAME = 'colorboard'
 
 
         /* =====================================================
@@ -561,7 +561,7 @@ pipeline {
 
             echo """
             ==========================================
-             RUDRAM DEPLOYMENT SUCCESSFUL
+             colorboard DEPLOYMENT SUCCESSFUL
             ==========================================
 
             Application : ${env.APP_NAME}
@@ -576,7 +576,7 @@ pipeline {
 
             echo """
             ==========================================
-             RUDRAM PIPELINE FAILED
+             colorboard PIPELINE FAILED
             ==========================================
 
             Build       : ${env.BUILD_NUMBER}
