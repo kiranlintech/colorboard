@@ -185,18 +185,19 @@ pipeline {
          * ===================================================== */
 
         stage('SonarQube Analysis') {
-    steps {
-        dir('backend') {
-            withSonarQubeEnv('sonarqube') {
-                sh '''
-                    mvn sonar:sonar \
-                      -Dsonar.projectKey=colorboard \
-                      -Dsonar.projectName=ColorBoard
-                '''
+            steps {
+                dir('backend') {
+                    withSonarQubeEnv('sonarqube') {
+                    sh '''
+                        mvn sonar:sonar \
+                        -Dsonar.projectKey=colorboard \
+                        -Dsonar.projectName=ColorBoard \
+                        -Dsonar.java.binaries=target/classes
+                        '''
+                        }
+                    }
+                }
             }
-        }
-    }
-}
 
         /* =====================================================
          * 6. SONAR QUALITY GATE
