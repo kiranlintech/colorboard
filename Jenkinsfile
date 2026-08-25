@@ -185,54 +185,30 @@ pipeline {
          * ===================================================== */
 
         stage('SonarQube Analysis') {
-
-            steps {
-
-                echo '=========================================='
-                echo 'SONARQUBE ANALYSIS'
-                echo '=========================================='
-
-                script {
-
-                    def scannerHome = tool 'sonar-scanner'
-
-                    withSonarQubeEnv("${SONAR_SERVER}") {
-
-                        sh """
-                            ${scannerHome}/bin/sonar-scanner \
-                              -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
-                              -Dsonar.projectName=${SONAR_PROJECT_NAME} \
-                              -Dsonar.sources=. \
-                              -Dsonar.inclusions=**/*.jsp,**/*.java,WEB-INF/** \
-                              -Dsonar.exclusions=assets/**,target/**,.git/** \
-                              -Dsonar.java.binaries=**/target/classes
-                        """
-                    }
-                }
+    steps {
+        dir('backend') {
+            withSonarQubeEnv('sonarqube') {
+                sh '''
+                    mvn sonar:sonar \
+                      -Dsonar.projectKey=colorboard \
+                      -Dsonar.projectName=ColorBoard
+                '''
             }
         }
-
+    }
+}
 
         /* =====================================================
          * 6. SONAR QUALITY GATE
          * ===================================================== */
 
         stage('SonarQube Quality Gate') {
-
-            steps {
-
-                echo '=========================================='
-                echo 'WAITING FOR SONARQUBE QUALITY GATE'
-                echo '=========================================='
-
-                timeout(time: 5, unit: 'MINUTES') {
-
-                    waitForQualityGate(
-                        abortPipeline: true
-                    )
+    steps {
+        timeout(time: 5, unit: 'MINUTES') {
+            waitForQualityGate abortPipeline: true
                 }
             }
-        }
+        }    
 
 
         /* =====================================================
