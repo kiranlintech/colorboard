@@ -224,9 +224,9 @@ pipeline {
                 echo 'PACKAGING APPLICATION'
                 echo '=========================================='
 
-                sh '''
-                    mvn clean package -DskipTests
-                '''
+                dir('backend') {
+                    sh 'mvn clean package -DskipTests'
+                }
             }
         }
 
