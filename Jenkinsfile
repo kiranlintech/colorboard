@@ -149,7 +149,7 @@ pipeline {
                 always {
 
                     junit(
-                        testResults: '**/target/surefire-reports/*.xml',
+                        junit testResults: 'backend/target/surefire-reports/*.xml',
                         allowEmptyResults: true
                     )
                 }
