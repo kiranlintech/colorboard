@@ -52,7 +52,7 @@ pipeline {
         MYLAB_SSH      = 'mylab-ssh'
         HOMELAB_HOST = '192.168.5.9'
         VPS_HOST     = '213.210.37.106'
-
+        SSH_CREDENTIALS = 'vps-ssh-key'
 
         /* =====================================================
          * SECURITY / QUALITY
@@ -353,7 +353,7 @@ pipeline {
 
                     withCredentials([
                         sshUserPrivateKey(
-                            credentialsId: 'vps-ssh-key',
+                            credentialsId: "${SSH_CREDENTIALS}",
                             keyFileVariable: 'SSH_KEY',
                             usernameVariable: 'SSH_USER'
                         )
