@@ -353,7 +353,7 @@ pipeline {
 
                     withCredentials([
                         sshUserPrivateKey(
-                            credentialsId: "${SSH_CREDENTIALS}",
+                            credentialsId: 'vps-ssh-key',
                             keyFileVariable: 'SSH_KEY',
                             usernameVariable: 'SSH_USER'
                         )
