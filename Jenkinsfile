@@ -386,7 +386,7 @@ pipeline {
                                     docker run -d \
                                         --name ${APP_NAME} \
                                         --restart unless-stopped \
-                                        -p 8082:8080 \
+                                        -p 8087:8080 \
                                         ${IMAGE_NAME}:${IMAGE_TAG}
 
                                     echo "Waiting for container..."
@@ -532,7 +532,7 @@ pipeline {
 
                                     curl -f \
                                         --max-time 10 \
-                                        http://localhost:8082/ || exit 1
+                                        http://localhost:8087/ || exit 1
 
                                     echo "Smoke test successful."
                                 '
