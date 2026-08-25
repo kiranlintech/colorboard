@@ -139,9 +139,9 @@ pipeline {
                 echo 'RUNNING MAVEN TESTS'
                 echo '=========================================='
 
-                sh '''
-                    mvn clean test
-                '''
+                dir('backend') {
+            sh 'mvn clean test package'
+                }
             }
 
             post {
