@@ -35,7 +35,7 @@ services:
     container_name: colorboard-nginx
     restart: unless-stopped
     ports:
-      - "80:80"
+      - "8087:80"
     volumes:
       - ./frontend:/usr/share/nginx/html:ro
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
