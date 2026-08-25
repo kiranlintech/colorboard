@@ -131,30 +131,22 @@ pipeline {
          * 3. MAVEN TEST
          * ===================================================== */
 
-        stage('Maven Build & Test') {
-
+        stage('Build & Test') {
             steps {
-
-                echo '=========================================='
-                echo 'RUNNING MAVEN TESTS'
-                echo '=========================================='
-
                 dir('backend') {
-            sh 'mvn clean test package'
+                    sh 'mvn clean test package'
                 }
             }
 
             post {
-
                 always {
-
                     junit(
-                        junit testResults: 'backend/target/surefire-reports/*.xml',
-                        allowEmptyResults: true
-                    )
-                }
+                    testResults: 'backend/target/surefire-reports/*.xml',
+                    allowEmptyResults: true
+                )
             }
         }
+    }
 
 
         /* =====================================================
