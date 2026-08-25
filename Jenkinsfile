@@ -39,7 +39,7 @@ pipeline {
         IMAGE_NAME = 'kiranlintech/colorboard'
 
         /* Dockerfile */
-        DOCKERFILE = 'docker/Dockerfile'
+        DOCKERFILE = 'backend/Dockerfile'
 
 
         /* =====================================================
@@ -154,30 +154,21 @@ pipeline {
          * ===================================================== */
 
         stage('OWASP Dependency Check') {
-
             steps {
-
                 echo '=========================================='
                 echo 'OWASP DEPENDENCY CHECK'
                 echo '=========================================='
 
                 dependencyCheck(
-                    additionalArguments: '''
-                        --scan ./
-                        --format XML
-                        --format HTML
-                        --prettyPrint
-                    ''',
-                    odcInstallation: 'OWASP-Dependency-Check'
-                )
+                    odcInstallation: 'OWASP-Dependency-Check',
+                    additionalArguments: '--scan . --disableAssembly'
+                    )
 
                 dependencyCheckPublisher(
-                    pattern: '**/dependency-check-report.xml',
-                    failedTotalHigh: 1,
-                    unstableTotalCritical: 1
-                )
+                    pattern: 'dependency-check-report.xml'
+                    )
+                }
             }
-        }
 
 
         /* =====================================================
@@ -248,7 +239,7 @@ pipeline {
                         -f ${DOCKERFILE} \
                         -t ${IMAGE_NAME}:${IMAGE_TAG} \
                         -t ${IMAGE_NAME}:latest \
-                        .
+                        backend
                 """
 
                 sh """
