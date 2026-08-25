@@ -37,6 +37,7 @@ pipeline {
 
         /* Docker Hub repository */
         IMAGE_NAME = 'kiranlintech/colorboard'
+        IMAGE_TAG      = "${BUILD_NUMBER}"
 
         /* Dockerfile */
         DOCKERFILE = 'backend/Dockerfile'
@@ -46,10 +47,11 @@ pipeline {
          * DEPLOYMENT SERVERS
          * ===================================================== */
 
+        DOCKER_CREDS   = 'dockerhub-credentials'
+        VPS_SSH        = 'vps-ssh-key'
+        MYLAB_SSH      = 'mylab-ssh'
         HOMELAB_HOST = '192.168.5.9'
         VPS_HOST     = '213.210.37.106'
-
-        SSH_CREDENTIALS = 'vps-ssh-key'
 
 
         /* =====================================================
