@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ColorBoard</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header><h1>🌈 ColorBoard</h1><p>Simple 3-tier DevOps practice application</p></header>
+
+  <main>
+    <section class="stats">
+      <div class="stat blue"><b id="total">0</b><span>Total</span></div>
+      <div class="stat green"><b id="completed">0</b><span>Completed</span></div>
+      <div class="stat yellow"><b id="pending">0</b><span>Pending</span></div>
+      <div class="stat purple"><b id="progress">0</b><span>In Progress</span></div>
+    </section>
+
+    <section class="card">
+      <h2>Add Task</h2>
+      <form id="taskForm">
+        <input id="title" placeholder="Task title" required>
+        <input id="description" placeholder="Description">
+        <select id="status">
+          <option>PENDING</option>
+          <option>IN_PROGRESS</option>
+          <option>COMPLETED</option>
+        </select>
+        <select id="color">
+          <option value="blue">Blue</option>
+          <option value="green">Green</option>
+          <option value="yellow">Yellow</option>
+          <option value="purple">Purple</option>
+          <option value="red">Red</option>
+        </select>
+        <button type="submit">+ Add Task</button>
+      </form>
+    </section>
+
+    <section>
+      <div class="section-title"><h2>Tasks</h2><button onclick="loadTasks()">↻ Refresh</button></div>
+      <div id="tasks" class="tasks"></div>
+    </section>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
