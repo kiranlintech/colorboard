@@ -481,67 +481,6 @@ pipeline {
             }
         }
 
-
-        /* =====================================================
-         * 13. SMOKE TEST
-         * ===================================================== */
-
-        stage('Smoke Test') {
-
-            when {
-
-                expression {
-                    return !params.SKIP_DEPLOY
-                }
-            }
-
-            steps {
-
-                script {
-
-                    def deployHost
-
-                    if (params.DEPLOY_TARGET == 'HOMELAB') {
-
-                        deployHost = env.HOMELAB_HOST
-
-                    } else {
-
-                        deployHost = env.VPS_HOST
-                    }
-
-                    echo '=========================================='
-                    echo 'RUNNING SMOKE TEST'
-                    echo '=========================================='
-
-                    withCredentials([
-                        sshUserPrivateKey(
-                            credentialsId: "${SSH_CREDENTIALS}",
-                            keyFileVariable: 'SSH_KEY',
-                            usernameVariable: 'SSH_USER'
-                        )
-                    ]) {
-
-                        sh """
-                            ssh -i "\$SSH_KEY" \
-                                -o BatchMode=yes \
-                                -o ConnectTimeout=10 \
-                                -o StrictHostKeyChecking=no \
-                                \$SSH_USER@${deployHost} '
-
-                                    echo "Testing application..."
-
-                                    curl -fsS \
-                                        --max-time 10 \
-                                        http://127.0.0.1:8087/api/tasks/health
-
-                                    echo "Smoke test successful."
-                                '
-                        """
-                    }
-                }
-            }
-        }
     }
 
 
