@@ -412,6 +412,27 @@ pipeline {
                             usernameVariable: 'DB_USER',
                             passwordVariable: 'DB_PASSWORD'
                          )
+                        sh """
+                            ssh -i "\$SSH_KEY" \
+                            -o BatchMode=yes \
+                            -o StrictHostKeyChecking=no \
+                            deploy@${VPS_HOST} << 'REMOTE'
+
+                            set -e
+
+                            docker rm -f colorboard 2>/dev/null || true
+
+                            docker run -d \
+                                --name colorboard \
+                                --network colorboard-net \
+                                -p 8087:8080 \
+                                -e DB_URL="jdbc:mysql://mysql:3306/colorboard" \
+                                -e DB_USER="${DB_USER}" \
+                                -e DB_PASSWORD="${DB_PASSWORD}" \
+                                ${IMAGE_NAME}:${IMAGE_TAG}
+
+                        REMOTE
+                        """
 
                     ]) {
 
