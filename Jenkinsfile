@@ -532,7 +532,7 @@ pipeline {
 
                                     curl -f \
                                         --max-time 10 \
-                                        http://${deployHost}:8087/ || exit 1
+                                        http://127.0.0.1:8087/ || exit 1
 
                                     echo "Smoke test successful."
                                 '
