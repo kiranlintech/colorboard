@@ -530,9 +530,9 @@ pipeline {
 
                                     echo "Testing application..."
 
-                                    curl -f \
+                                    curl -fsS \
                                         --max-time 10 \
-                                        http://127.0.0.1:8087/ || exit 1
+                                        http://127.0.0.1:8087/api/tasks/health
 
                                     echo "Smoke test successful."
                                 '
