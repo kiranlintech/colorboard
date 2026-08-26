@@ -35,14 +35,14 @@ pipeline {
         IMAGE_NAME = 'kiranlintech/colorboard'
         DOCKERFILE = 'backend/Dockerfile'
 
-        // Servers
+        // Deployment servers
         HOMELAB_HOST = '192.168.5.9'
         VPS_HOST = '213.210.37.106'
 
         HOMELAB_SSH = 'mylab-ssh'
         VPS_SSH = 'vps-ssh-key'
 
-        // Jenkins Credentials
+        // Jenkins credentials
         DOCKER_CREDS = 'dockerhub-credentials'
         DB_CREDS = 'db-key'
 
@@ -60,6 +60,24 @@ pipeline {
         stage('Checkout') {
             steps {
                 checkout scm
+            }
+        }
+
+        stage('Initialize') {
+            steps {
+                script {
+                    def shortCommit = sh(
+                        script: 'git rev-parse --short=7 HEAD',
+                        returnStdout: true
+                    ).trim()
+
+                    env.IMAGE_TAG = "${BUILD_NUMBER}-${shortCommit}"
+
+                    echo "Build      : ${BUILD_NUMBER}"
+                    echo "Commit     : ${shortCommit}"
+                    echo "Image      : ${IMAGE_NAME}:${env.IMAGE_TAG}"
+                    echo "Target     : ${params.DEPLOY_TARGET}"
+                }
             }
         }
 
@@ -82,6 +100,7 @@ pipeline {
 
         stage('OWASP Dependency Check') {
             steps {
+
                 dependencyCheck(
                     odcInstallation: 'OWASP-Dependency-Check',
                     additionalArguments: '--scan . --disableAssembly'
@@ -95,8 +114,11 @@ pipeline {
 
         stage('SonarQube Analysis') {
             steps {
+
                 dir('backend') {
+
                     withSonarQubeEnv("${SONAR_SERVER}") {
+
                         sh '''
                             mvn sonar:sonar \
                                 -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
@@ -110,21 +132,17 @@ pipeline {
 
         stage('Quality Gate') {
             steps {
+
                 timeout(time: 5, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: true
+                    waitForQualityGate(
+                        abortPipeline: true
+                    )
                 }
             }
         }
 
         stage('Build Docker Image') {
             steps {
-                script {
-                    env.IMAGE_TAG =
-                        "${BUILD_NUMBER}-${sh(
-                            script: 'git rev-parse --short=7 HEAD',
-                            returnStdout: true
-                        ).trim()}"
-                }
 
                 sh """
                     docker build \
@@ -138,7 +156,13 @@ pipeline {
 
         stage('Trivy Scan') {
             steps {
+
                 sh '''
+                    if ! command -v trivy >/dev/null 2>&1; then
+                        echo "ERROR: Trivy is not installed."
+                        exit 1
+                    fi
+
                     trivy image \
                         --severity HIGH,CRITICAL \
                         --exit-code 1 \
@@ -196,6 +220,9 @@ pipeline {
                         sshCredential = env.VPS_SSH
                     }
 
+                    echo "Deploying ${IMAGE_NAME}:${IMAGE_TAG}"
+                    echo "Target: ${params.DEPLOY_TARGET}"
+
                     withCredentials([
 
                         sshUserPrivateKey(
@@ -212,113 +239,135 @@ pipeline {
 
                     ]) {
 
-                        sh """
-                            chmod 600 "\$SSH_KEY"
-
-                            ssh -i "\$SSH_KEY" \
-                                -o StrictHostKeyChecking=no \
-                                "\$SSH_USER@${deployHost}" '
-
+                        sh(
+                            script: """
                                 set -e
 
-                                docker pull ${IMAGE_NAME}:${IMAGE_TAG}
+                                chmod 600 "\$SSH_KEY"
 
-                                if ! docker network inspect colorboard-net >/dev/null 2>&1; then
-                                    docker network create colorboard-net
-                                fi
+                                echo "Preparing database configuration..."
 
-                                if ! docker inspect colorboard-mysql >/dev/null 2>&1; then
-                                    echo "ERROR: colorboard-mysql not found"
-                                    exit 1
-                                fi
+                                printf '%s\\\\n' \\
+                                    "DB_USER=\$DB_USER" \\
+                                    "DB_PASSWORD=\$DB_PASSWORD" \\
+                                    "SPRING_DATASOURCE_USERNAME=\$DB_USER" \\
+                                    "SPRING_DATASOURCE_PASSWORD=\$DB_PASSWORD" \\
+                                    "SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/colorboard?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC" \\
+                                    "DB_URL=jdbc:mysql://mysql:3306/colorboard?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC" \\
+                                    | ssh -i "\$SSH_KEY" \\
+                                        -o StrictHostKeyChecking=no \\
+                                        "\$SSH_USER@${deployHost}" \\
+                                        'cat > /tmp/colorboard.env'
 
-                                docker network connect \
-                                    --alias mysql \
-                                    colorboard-net \
-                                    colorboard-mysql 2>/dev/null || true
 
-                                docker stop ${APP_NAME} 2>/dev/null || true
-                                docker rm ${APP_NAME} 2>/dev/null || true
+                                ssh -i "\$SSH_KEY" \\
+                                    -o StrictHostKeyChecking=no \\
+                                    "\$SSH_USER@${deployHost}" '
+                                    
+                                    set -e
 
-                                docker run -d \
-                                    --name ${APP_NAME} \
-                                    --restart unless-stopped \
-                                    --network colorboard-net \
-                                    -p 8087:8080 \
-                                    -e DB_URL="jdbc:mysql://mysql:3306/colorboard" \
-                                    -e DB_USER="\$DB_USER" \
-                                    -e DB_PASSWORD="\$DB_PASSWORD" \
-                                    -e SPRING_DATASOURCE_URL="jdbc:mysql://mysql:3306/colorboard?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC" \
-                                    -e SPRING_DATASOURCE_USERNAME="\$DB_USER" \
-                                    -e SPRING_DATASOURCE_PASSWORD="\$DB_PASSWORD" \
-                                    ${IMAGE_NAME}:${IMAGE_TAG}
+                                    echo "Pulling Docker image..."
 
-                                echo "Waiting for application..."
+                                    docker pull ${IMAGE_NAME}:${IMAGE_TAG}
 
-                                for i in \$(seq 1 18); do
 
-                                    if curl -fsS \
-                                        --max-time 5 \
-                                        http://127.0.0.1:8087/api/tasks/health \
-                                        >/dev/null 2>&1; then
+                                    echo "Checking Docker network..."
 
-                                        echo "Application is healthy."
-                                        exit 0
+                                    if ! docker network inspect colorboard-net >/dev/null 2>&1; then
+                                        docker network create colorboard-net
                                     fi
 
-                                    echo "Waiting... \$i/18"
-                                    sleep 5
-                                done
 
-                                echo "ERROR: Application did not become healthy."
+                                    echo "Checking MySQL..."
 
-                                docker logs --tail 100 ${APP_NAME}
+                                    if ! docker inspect colorboard-mysql >/dev/null 2>&1; then
+                                        echo "ERROR: colorboard-mysql container not found."
+                                        rm -f /tmp/colorboard.env
+                                        exit 1
+                                    fi
 
-                                exit 1
-                            '
-                        """
-                    }
-                }
-            }
-        }
 
-        stage('Health Check') {
+                                    if [ "\$(docker inspect -f "{{.State.Running}}" colorboard-mysql)" != "true" ]; then
+                                        echo "ERROR: colorboard-mysql is not running."
+                                        rm -f /tmp/colorboard.env
+                                        exit 1
+                                    fi
 
-            when {
-                expression {
-                    return !params.SKIP_DEPLOY
-                }
-            }
 
-            steps {
+                                    echo "Connecting MySQL to application network..."
 
-                script {
+                                    docker network connect \
+                                        --alias mysql \
+                                        colorboard-net \
+                                        colorboard-mysql 2>/dev/null || true
 
-                    def deployHost
-                    def sshCredential
 
-                    if (params.DEPLOY_TARGET == 'HOMELAB') {
-                        deployHost = env.HOMELAB_HOST
-                        sshCredential = env.HOMELAB_SSH
-                    } else {
-                        deployHost = env.VPS_HOST
-                        sshCredential = env.VPS_SSH
-                    }
+                                    echo "Stopping old application..."
 
-                    withCredentials([
-                        sshUserPrivateKey(
-                            credentialsId: sshCredential,
-                            keyFileVariable: 'SSH_KEY',
-                            usernameVariable: 'SSH_USER'
+                                    docker stop ${APP_NAME} 2>/dev/null || true
+                                    docker rm ${APP_NAME} 2>/dev/null || true
+
+
+                                    echo "Starting new application..."
+
+                                    docker run -d \
+                                        --name ${APP_NAME} \
+                                        --restart unless-stopped \
+                                        --network colorboard-net \
+                                        -p 8087:8080 \
+                                        --env-file /tmp/colorboard.env \
+                                        ${IMAGE_NAME}:${IMAGE_TAG}
+
+
+                                    rm -f /tmp/colorboard.env
+
+
+                                    echo "Application started."
+
+
+                                    echo "Waiting for application health..."
+
+                                    HEALTH_OK=false
+
+                                    for i in \$(seq 1 18); do
+
+                                        if curl -fsS \
+                                            --max-time 5 \
+                                            http://127.0.0.1:8087/api/tasks/health \
+                                            >/dev/null 2>&1; then
+
+                                            echo "Application is healthy."
+
+                                            HEALTH_OK=true
+                                            break
+                                        fi
+
+                                        echo "Waiting for application... \$i/18"
+
+                                        sleep 5
+
+                                    done
+
+
+                                    if [ "\$HEALTH_OK" != "true" ]; then
+
+                                        echo "ERROR: Application did not become healthy."
+
+                                        echo ""
+                                        echo "Application logs:"
+
+                                        docker logs --tail 100 ${APP_NAME} || true
+
+                                        exit 1
+                                    fi
+
+
+                                    echo "Deployment successful."
+
+                                '
+                            """,
+                            label: "Deploy ColorBoard"
                         )
-                    ]) {
-
-                        sh """
-                            ssh -i "\$SSH_KEY" \
-                                -o StrictHostKeyChecking=no \
-                                "\$SSH_USER@${deployHost}" \
-                                'curl -fsS http://127.0.0.1:8087/api/tasks/health'
-                        """
                     }
                 }
             }
@@ -346,7 +395,8 @@ pipeline {
             COLORBOARD PIPELINE FAILED
             ==========================================
 
-            Build : ${env.BUILD_NUMBER}
+            Build       : ${env.BUILD_NUMBER}
+            Application : ${env.APP_NAME}
 
             Check Jenkins logs for details.
 
@@ -359,8 +409,6 @@ pipeline {
                 deleteDirs: true,
                 disableDeferredWipeout: true
             )
-
-            sh 'docker image prune -f || true'
         }
     }
 }
