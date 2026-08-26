@@ -386,6 +386,7 @@ pipeline {
                                     docker run -d \
                                         --name ${APP_NAME} \
                                         --restart unless-stopped \
+                                        --network colorboard-net \
                                         -p 8087:8080 \
                                         ${IMAGE_NAME}:${IMAGE_TAG}
 
