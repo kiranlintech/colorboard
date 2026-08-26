@@ -384,10 +384,13 @@ pipeline {
                                     echo "Starting new container..."
 
                                     docker run -d \
-                                        --name ${APP_NAME} \
-                                        --restart unless-stopped \
+                                      --name colorboard \
+                                      --network colorboard-net \
                                         -p 8087:8080 \
-                                        ${IMAGE_NAME}:${IMAGE_TAG}
+                                        -e DB_URL="jdbc:mysql://colorboard-mysql:3306/colorboard" \
+                                        -e DB_USER="colorboard" \
+                                        -e DB_PASSWORD="YOUR_PASSWORD" \
+                                        kiranlintech/colorboard:${IMAGE_TAG}
 
                                     echo "Waiting for container..."
 
