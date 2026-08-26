@@ -14,6 +14,7 @@ pipeline {
     }
 
     parameters {
+
         choice(
             name: 'DEPLOY_TARGET',
             choices: ['HOMELAB', 'VPS'],
@@ -35,11 +36,10 @@ pipeline {
 
         APP_NAME = 'colorboard'
 
-        /* Docker Hub repository */
         IMAGE_NAME = 'kiranlintech/colorboard'
-        IMAGE_TAG      = "${BUILD_NUMBER}"
 
-        /* Dockerfile */
+        IMAGE_TAG = "${BUILD_NUMBER}"
+
         DOCKERFILE = 'backend/Dockerfile'
 
 
@@ -47,25 +47,37 @@ pipeline {
          * DEPLOYMENT SERVERS
          * ===================================================== */
 
-        DOCKER_CREDS   = 'dockerhub-credentials'
-        VPS_SSH        = 'vps-ssh-key'
-        MYLAB_SSH      = 'mylab-ssh'
         HOMELAB_HOST = '192.168.5.9'
-        VPS_HOST     = '213.210.37.106'
-        SSH_CREDENTIALS = 'vps-ssh-key'
-        DB_PASS = 'db-key'
+
+        VPS_HOST = '213.210.37.106'
+
+        HOMELAB_SSH = 'mylab-ssh'
+
+        VPS_SSH = 'vps-ssh-key'
+
 
         /* =====================================================
-         * SECURITY / QUALITY
+         * CREDENTIALS
+         * ===================================================== */
+
+        DOCKER_CREDS = 'dockerhub-credentials'
+
+        DB_CREDS = 'db-key'
+
+
+        /* =====================================================
+         * SONARQUBE
          * ===================================================== */
 
         SONAR_SERVER = 'sonarqube'
+
         SONAR_PROJECT_KEY = 'colorboard'
-        SONAR_PROJECT_NAME = 'colorboard'
+
+        SONAR_PROJECT_NAME = 'ColorBoard'
 
 
         /* =====================================================
-         * JENKINS / BUILD
+         * MAVEN
          * ===================================================== */
 
         MAVEN_OPTS = '-Dmaven.repo.local=.m2/repository'
@@ -96,7 +108,7 @@ pipeline {
                     echo "Git commit:"
                     git rev-parse HEAD
 
-                    echo "Project files:"
+                    echo "Project structure:"
                     find . -maxdepth 2 -type f | sort | head -100
                 '''
             }
@@ -104,7 +116,7 @@ pipeline {
 
 
         /* =====================================================
-         * 2. INITIALIZE BUILD VARIABLES
+         * 2. INITIALIZE
          * ===================================================== */
 
         stage('Initialize') {
@@ -118,7 +130,8 @@ pipeline {
                         returnStdout: true
                     ).trim()
 
-                    env.IMAGE_TAG = "${BUILD_NUMBER}-${env.GIT_COMMIT_SHORT}"
+                    env.IMAGE_TAG =
+                        "${BUILD_NUMBER}-${env.GIT_COMMIT_SHORT}"
 
                     echo "Application : ${env.APP_NAME}"
                     echo "Build       : ${BUILD_NUMBER}"
@@ -131,25 +144,32 @@ pipeline {
 
 
         /* =====================================================
-         * 3. MAVEN TEST
+         * 3. BUILD & TEST
          * ===================================================== */
 
         stage('Build & Test') {
+
             steps {
+
                 dir('backend') {
-                    sh 'mvn clean test package'
+
+                    sh '''
+                        mvn clean test package
+                    '''
                 }
             }
 
             post {
+
                 always {
+
                     junit(
-                    testResults: 'backend/target/surefire-reports/*.xml',
-                    allowEmptyResults: true
-                )
+                        testResults: 'backend/target/surefire-reports/*.xml',
+                        allowEmptyResults: true
+                    )
+                }
             }
         }
-    }
 
 
         /* =====================================================
@@ -157,53 +177,70 @@ pipeline {
          * ===================================================== */
 
         stage('OWASP Dependency Check') {
+
             steps {
+
                 echo '=========================================='
                 echo 'OWASP DEPENDENCY CHECK'
                 echo '=========================================='
 
                 dependencyCheck(
                     odcInstallation: 'OWASP-Dependency-Check',
-                    additionalArguments: '--scan . --disableAssembly'
-                    )
+
+                    additionalArguments:
+                        '--scan . --disableAssembly'
+                )
 
                 dependencyCheckPublisher(
                     pattern: 'dependency-check-report.xml'
-                    )
-                }
+                )
             }
+        }
 
 
         /* =====================================================
-         * 5. SONARQUBE
+         * 5. SONARQUBE ANALYSIS
          * ===================================================== */
 
         stage('SonarQube Analysis') {
+
             steps {
+
                 dir('backend') {
+
                     withSonarQubeEnv('sonarqube') {
-                    sh '''
-                        mvn sonar:sonar \
-                        -Dsonar.projectKey=colorboard \
-                        -Dsonar.projectName=ColorBoard \
-                        -Dsonar.java.binaries=target/classes
+
+                        sh '''
+                            mvn sonar:sonar \
+                                -Dsonar.projectKey=colorboard \
+                                -Dsonar.projectName=ColorBoard \
+                                -Dsonar.java.binaries=target/classes
                         '''
-                        }
                     }
                 }
             }
+        }
+
 
         /* =====================================================
-         * 6. SONAR QUALITY GATE
+         * 6. SONARQUBE QUALITY GATE
          * ===================================================== */
 
         stage('SonarQube Quality Gate') {
-    steps {
-        timeout(time: 5, unit: 'MINUTES') {
-            waitForQualityGate abortPipeline: true
+
+            steps {
+
+                timeout(
+                    time: 5,
+                    unit: 'MINUTES'
+                ) {
+
+                    waitForQualityGate(
+                        abortPipeline: true
+                    )
                 }
             }
-        }    
+        }
 
 
         /* =====================================================
@@ -219,14 +256,17 @@ pipeline {
                 echo '=========================================='
 
                 dir('backend') {
-                    sh 'mvn clean package -DskipTests'
+
+                    sh '''
+                        mvn clean package -DskipTests
+                    '''
                 }
             }
         }
 
 
         /* =====================================================
-         * 8. DOCKER BUILD
+         * 8. BUILD DOCKER IMAGE
          * ===================================================== */
 
         stage('Build Docker Image') {
@@ -293,11 +333,13 @@ pipeline {
                 echo '=========================================='
 
                 withCredentials([
+
                     usernamePassword(
-                        credentialsId: 'dockerhub-credentials',
+                        credentialsId: "${DOCKER_CREDS}",
                         usernameVariable: 'DOCKER_USERNAME',
                         passwordVariable: 'DOCKER_PASSWORD'
                     )
+
                 ]) {
 
                     sh '''
@@ -336,78 +378,191 @@ pipeline {
                 script {
 
                     def deployHost
+                    def sshCredential
 
                     if (params.DEPLOY_TARGET == 'HOMELAB') {
 
                         deployHost = env.HOMELAB_HOST
+                        sshCredential = env.HOMELAB_SSH
 
                     } else {
 
                         deployHost = env.VPS_HOST
+                        sshCredential = env.VPS_SSH
                     }
 
                     echo '=========================================='
                     echo "DEPLOYING TO ${params.DEPLOY_TARGET}"
                     echo '=========================================='
 
-                    echo "Target host: ${deployHost}"
+                    echo "Target host : ${deployHost}"
+                    echo "SSH credential : ${sshCredential}"
+
 
                     withCredentials([
+
                         sshUserPrivateKey(
-                            credentialsId: "${SSH_CREDENTIALS}",
+                            credentialsId: sshCredential,
                             keyFileVariable: 'SSH_KEY',
                             usernameVariable: 'SSH_USER'
+                        ),
+
+                        string(
+                            credentialsId: "${DB_CREDS}",
+                            variable: 'DB_PASSWORD'
                         )
+
                     ]) {
 
-                        sh """
-                            chmod 600 "\$SSH_KEY"
+                        sh(
+                            script: """
+                                chmod 600 "\$SSH_KEY"
 
-                            ssh -i "\$SSH_KEY" \
-                                -o BatchMode=yes \
-                                -o ConnectTimeout=10 \
-                                -o StrictHostKeyChecking=no \
-                                \$SSH_USER@${deployHost} '
+                                ssh -i "\$SSH_KEY" \
+                                    -o BatchMode=yes \
+                                    -o ConnectTimeout=10 \
+                                    -o StrictHostKeyChecking=no \
+                                    "\$SSH_USER@${deployHost}" '
+                                    
                                     set -e
+
+                                    echo "=========================================="
+                                    echo "REMOTE DEPLOYMENT"
+                                    echo "=========================================="
 
                                     echo "Pulling image..."
 
                                     docker pull ${IMAGE_NAME}:${IMAGE_TAG}
 
-                                    echo "Stopping old container..."
+
+                                    echo "Checking Docker network..."
+
+                                    if ! docker network inspect colorboard-net >/dev/null 2>&1; then
+
+                                        echo "Creating colorboard-net..."
+
+                                        docker network create colorboard-net
+
+                                    fi
+
+
+                                    echo "Checking MySQL container..."
+
+                                    if ! docker inspect colorboard-mysql >/dev/null 2>&1; then
+
+                                        echo "ERROR: colorboard-mysql container does not exist."
+
+                                        exit 1
+
+                                    fi
+
+
+                                    if [ "\$(docker inspect -f "{{.State.Running}}" colorboard-mysql)" != "true" ]; then
+
+                                        echo "ERROR: colorboard-mysql is not running."
+
+                                        docker logs --tail 100 colorboard-mysql || true
+
+                                        exit 1
+
+                                    fi
+
+
+                                    echo "Ensuring MySQL is connected to colorboard-net..."
+
+                                    docker network connect \
+                                        --alias mysql \
+                                        colorboard-net \
+                                        colorboard-mysql 2>/dev/null || true
+
+
+                                    echo "Verifying MySQL DNS..."
+
+                                    docker run --rm \
+                                        --network colorboard-net \
+                                        busybox \
+                                        nslookup mysql || true
+
+
+                                    echo "Stopping old ColorBoard container..."
 
                                     docker stop ${APP_NAME} || true
 
-                                    echo "Removing old container..."
+
+                                    echo "Removing old ColorBoard container..."
 
                                     docker rm ${APP_NAME} || true
 
-                                    echo "Starting new container..."
+
+                                    echo "Starting new ColorBoard container..."
 
                                     docker run -d \
-                                      --name colorboard \
-                                      --network colorboard-net \
+                                        --name ${APP_NAME} \
+                                        --network colorboard-net \
                                         -p 8087:8080 \
-                                        -e DB_URL="jdbc:mysql://colorboard-mysql:3306/colorboard" \
+                                        -e DB_URL="jdbc:mysql://mysql:3306/colorboard" \
                                         -e DB_USER="colorboard" \
-                                        -e DB_PASSWORD="${DB_PASS}" \
-                                        kiranlintech/colorboard:${IMAGE_TAG}
+                                        -e DB_PASSWORD="\$DB_PASSWORD" \
+                                        ${IMAGE_NAME}:${IMAGE_TAG}
 
-                                    echo "Waiting for container..."
 
-                                    sleep 10
+                                    echo "Waiting for application startup..."
+
+                                    sleep 15
+
 
                                     echo "Container status..."
 
-                                    docker ps --filter name=${APP_NAME}
+                                    docker ps \
+                                        --filter name=${APP_NAME}
+
 
                                     echo "Checking container..."
 
-                                    docker inspect \
-                                        --format="{{.State.Status}}" \
-                                        ${APP_NAME}
+                                    if [ "\$(docker inspect -f "{{.State.Running}}" ${APP_NAME})" != "true" ]; then
+
+                                        echo "ERROR: ColorBoard container is not running."
+
+                                        echo "===== APPLICATION LOGS ====="
+
+                                        docker logs --tail 100 ${APP_NAME} || true
+
+                                        exit 1
+
+                                    fi
+
+
+                                    echo "Container is running."
+
+
+                                    echo "Checking application health..."
+
+                                    if ! curl -f \
+                                        --max-time 10 \
+                                        http://127.0.0.1:8087/api/tasks/health; then
+
+                                        echo ""
+
+                                        echo "ERROR: Application health check failed."
+
+                                        echo "===== APPLICATION LOGS ====="
+
+                                        docker logs --tail 100 ${APP_NAME} || true
+
+                                        exit 1
+
+                                    fi
+
+
+                                    echo ""
+
+                                    echo "=========================================="
+                                    echo "DEPLOYMENT SUCCESSFUL"
+                                    echo "=========================================="
                                 '
-                        """
+                            """,
+                            label: "Deploy ColorBoard"
+                        )
                     }
                 }
             }
@@ -415,7 +570,7 @@ pipeline {
 
 
         /* =====================================================
-         * 12. DEPLOYMENT HEALTH CHECK
+         * 12. HEALTH CHECK
          * ===================================================== */
 
         stage('Health Check') {
@@ -432,52 +587,77 @@ pipeline {
                 script {
 
                     def deployHost
+                    def sshCredential
 
                     if (params.DEPLOY_TARGET == 'HOMELAB') {
 
                         deployHost = env.HOMELAB_HOST
+                        sshCredential = env.HOMELAB_SSH
 
                     } else {
 
                         deployHost = env.VPS_HOST
+                        sshCredential = env.VPS_SSH
                     }
+
 
                     echo '=========================================='
                     echo 'APPLICATION HEALTH CHECK'
                     echo '=========================================='
 
+
                     withCredentials([
+
                         sshUserPrivateKey(
-                            credentialsId: "${SSH_CREDENTIALS}",
+                            credentialsId: sshCredential,
                             keyFileVariable: 'SSH_KEY',
                             usernameVariable: 'SSH_USER'
                         )
+
                     ]) {
 
                         sh """
+                            chmod 600 "\$SSH_KEY"
+
                             ssh -i "\$SSH_KEY" \
                                 -o BatchMode=yes \
                                 -o ConnectTimeout=10 \
                                 -o StrictHostKeyChecking=no \
-                                \$SSH_USER@${deployHost} '
+                                "\$SSH_USER@${deployHost}" '
 
-                                    set -e
+                                set -e
 
-                                    echo "Checking container..."
+                                echo "Checking container..."
 
-                                    docker ps --filter name=${APP_NAME}
+                                docker ps \
+                                    --filter name=${APP_NAME}
 
-                                    if [ "\$(docker inspect -f "{{.State.Running}}" ${APP_NAME})" != "true" ]; then
 
-                                        echo "ERROR: Container is not running."
+                                if [ "\$(docker inspect -f "{{.State.Running}}" ${APP_NAME})" != "true" ]; then
 
-                                        docker logs ${APP_NAME} || true
+                                    echo "ERROR: Container is not running."
 
-                                        exit 1
-                                    fi
+                                    docker logs --tail 100 ${APP_NAME} || true
 
-                                    echo "Container is running successfully."
-                                '
+                                    exit 1
+
+                                fi
+
+
+                                echo "Container is running."
+
+
+                                echo "Testing application health..."
+
+                                curl -f \
+                                    --max-time 10 \
+                                    http://127.0.0.1:8087/api/tasks/health
+
+
+                                echo ""
+
+                                echo "Health check successful."
+                            '
                         """
                     }
                 }
@@ -503,43 +683,66 @@ pipeline {
                 script {
 
                     def deployHost
+                    def sshCredential
 
                     if (params.DEPLOY_TARGET == 'HOMELAB') {
 
                         deployHost = env.HOMELAB_HOST
+                        sshCredential = env.HOMELAB_SSH
 
                     } else {
 
                         deployHost = env.VPS_HOST
+                        sshCredential = env.VPS_SSH
                     }
+
 
                     echo '=========================================='
                     echo 'RUNNING SMOKE TEST'
                     echo '=========================================='
 
+
                     withCredentials([
+
                         sshUserPrivateKey(
-                            credentialsId: "${SSH_CREDENTIALS}",
+                            credentialsId: sshCredential,
                             keyFileVariable: 'SSH_KEY',
                             usernameVariable: 'SSH_USER'
                         )
+
                     ]) {
 
                         sh """
+                            chmod 600 "\$SSH_KEY"
+
                             ssh -i "\$SSH_KEY" \
                                 -o BatchMode=yes \
                                 -o ConnectTimeout=10 \
                                 -o StrictHostKeyChecking=no \
-                                \$SSH_USER@${deployHost} '
+                                "\$SSH_USER@${deployHost}" '
 
-                                    echo "Testing application..."
+                                set -e
 
-                                    curl -f \
-                                        --max-time 10 \
-                                        http://127.0.0.1:8087/ || exit 1
+                                echo "Testing backend health endpoint..."
 
-                                    echo "Smoke test successful."
-                                '
+                                curl -f \
+                                    --max-time 10 \
+                                    http://127.0.0.1:8087/api/tasks/health
+
+
+                                echo ""
+
+                                echo "Testing tasks API..."
+
+                                curl -f \
+                                    --max-time 10 \
+                                    http://127.0.0.1:8087/api/tasks
+
+
+                                echo ""
+
+                                echo "Smoke test successful."
+                            '
                         """
                     }
                 }
@@ -558,7 +761,7 @@ pipeline {
 
             echo """
             ==========================================
-             colorboard DEPLOYMENT SUCCESSFUL
+             COLORBOARD DEPLOYMENT SUCCESSFUL
             ==========================================
 
             Application : ${env.APP_NAME}
@@ -569,11 +772,12 @@ pipeline {
             """
         }
 
+
         failure {
 
             echo """
             ==========================================
-             colorboard PIPELINE FAILED
+             COLORBOARD PIPELINE FAILED
             ==========================================
 
             Build       : ${env.BUILD_NUMBER}
@@ -585,6 +789,7 @@ pipeline {
             """
         }
 
+
         always {
 
             echo 'Cleaning Jenkins workspace...'
@@ -593,6 +798,7 @@ pipeline {
                 deleteDirs: true,
                 disableDeferredWipeout: true
             )
+
 
             sh '''
                 echo "Cleaning unused local Docker images..."
