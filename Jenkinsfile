@@ -186,9 +186,7 @@ pipeline {
 
                 dependencyCheck(
                     odcInstallation: 'OWASP-Dependency-Check',
-
-                    additionalArguments:
-                        '--scan . --disableAssembly'
+                    additionalArguments: '--scan . --disableAssembly'
                 )
 
                 dependencyCheckPublisher(
@@ -208,12 +206,12 @@ pipeline {
 
                 dir('backend') {
 
-                    withSonarQubeEnv('sonarqube') {
+                    withSonarQubeEnv("${SONAR_SERVER}") {
 
                         sh '''
                             mvn sonar:sonar \
-                                -Dsonar.projectKey=colorboard \
-                                -Dsonar.projectName=ColorBoard \
+                                -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
+                                -Dsonar.projectName=${SONAR_PROJECT_NAME} \
                                 -Dsonar.java.binaries=target/classes
                         '''
                     }
@@ -395,9 +393,8 @@ pipeline {
                     echo "DEPLOYING TO ${params.DEPLOY_TARGET}"
                     echo '=========================================='
 
-                    echo "Target host : ${deployHost}"
+                    echo "Target host    : ${deployHost}"
                     echo "SSH credential : ${sshCredential}"
-
 
                     withCredentials([
 
@@ -411,33 +408,14 @@ pipeline {
                             credentialsId: "${DB_CREDS}",
                             usernameVariable: 'DB_USER',
                             passwordVariable: 'DB_PASSWORD'
-                         )
-                        sh """
-                            ssh -i "\$SSH_KEY" \
-                            -o BatchMode=yes \
-                            -o StrictHostKeyChecking=no \
-                            deploy@${VPS_HOST} << 'REMOTE'
-
-                            set -e
-
-                            docker rm -f colorboard 2>/dev/null || true
-
-                            docker run -d \
-                                --name colorboard \
-                                --network colorboard-net \
-                                -p 8087:8080 \
-                                -e DB_URL="jdbc:mysql://mysql:3306/colorboard" \
-                                -e DB_USER="${DB_USER}" \
-                                -e DB_PASSWORD="${DB_PASSWORD}" \
-                                ${IMAGE_NAME}:${IMAGE_TAG}
-
-                        REMOTE
-                        """
+                        )
 
                     ]) {
 
                         sh(
                             script: """
+                                set -e
+
                                 chmod 600 "\$SSH_KEY"
 
                                 ssh -i "\$SSH_KEY" \
@@ -445,7 +423,7 @@ pipeline {
                                     -o ConnectTimeout=10 \
                                     -o StrictHostKeyChecking=no \
                                     "\$SSH_USER@${deployHost}" '
-                                    
+
                                     set -e
 
                                     echo "=========================================="
@@ -523,7 +501,7 @@ pipeline {
                                         --network colorboard-net \
                                         -p 8087:8080 \
                                         -e DB_URL="jdbc:mysql://mysql:3306/colorboard" \
-                                        -e DB_USER="colorboard" \
+                                        -e DB_USER="\$DB_USER" \
                                         -e DB_PASSWORD="\$DB_PASSWORD" \
                                         ${IMAGE_NAME}:${IMAGE_TAG}
 
@@ -579,8 +557,11 @@ pipeline {
                                     echo ""
 
                                     echo "=========================================="
+
                                     echo "DEPLOYMENT SUCCESSFUL"
+
                                     echo "=========================================="
+
                                 '
                             """,
                             label: "Deploy ColorBoard"
@@ -639,6 +620,8 @@ pipeline {
                     ]) {
 
                         sh """
+                            set -e
+
                             chmod 600 "\$SSH_KEY"
 
                             ssh -i "\$SSH_KEY" \
@@ -679,6 +662,7 @@ pipeline {
                                 echo ""
 
                                 echo "Health check successful."
+
                             '
                         """
                     }
@@ -735,6 +719,8 @@ pipeline {
                     ]) {
 
                         sh """
+                            set -e
+
                             chmod 600 "\$SSH_KEY"
 
                             ssh -i "\$SSH_KEY" \
@@ -764,6 +750,7 @@ pipeline {
                                 echo ""
 
                                 echo "Smoke test successful."
+
                             '
                         """
                     }
