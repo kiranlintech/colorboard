@@ -407,10 +407,11 @@ pipeline {
                             usernameVariable: 'SSH_USER'
                         ),
 
-                        string(
+                        usernamePassword(
                             credentialsId: "${DB_CREDS}",
-                            variable: 'DB_PASSWORD'
-                        )
+                            usernameVariable: 'DB_USER',
+                            passwordVariable: 'DB_PASSWORD'
+                         )
 
                     ]) {
 
