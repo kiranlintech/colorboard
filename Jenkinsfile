@@ -53,6 +53,7 @@ pipeline {
         HOMELAB_HOST = '192.168.5.9'
         VPS_HOST     = '213.210.37.106'
         SSH_CREDENTIALS = 'vps-ssh-key'
+        DB_PASS = 'db-key'
 
         /* =====================================================
          * SECURITY / QUALITY
@@ -389,7 +390,7 @@ pipeline {
                                         -p 8087:8080 \
                                         -e DB_URL="jdbc:mysql://colorboard-mysql:3306/colorboard" \
                                         -e DB_USER="colorboard" \
-                                        -e DB_PASSWORD="YOUR_PASSWORD" \
+                                        -e DB_PASSWORD="${DB_PASS}" \
                                         kiranlintech/colorboard:${IMAGE_TAG}
 
                                     echo "Waiting for container..."
