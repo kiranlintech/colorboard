@@ -87,6 +87,17 @@ jobs:
           java-version: "21"
           cache: maven
 
+      - name: Verify Java setup
+        run: |
+          echo "JAVA_HOME=$JAVA_HOME"
+          which java
+          java -version
+          javac -version
+
+      - name: Build application
+        working-directory: backend
+        run: mvn clean package    
+
 
       # ==========================================
       # 3. INITIALIZE VARIABLES
