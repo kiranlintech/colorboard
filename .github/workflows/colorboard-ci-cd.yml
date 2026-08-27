@@ -156,7 +156,6 @@ jobs:
           format: 'HTML'
           out: 'reports'
           args: >
-            --noupdates
             --disableAssembly
             
       - name: Upload OWASP Report
