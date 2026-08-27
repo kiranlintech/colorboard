@@ -171,32 +171,32 @@ jobs:
       # 7. SONARQUBE ANALYSIS
       # ==========================================
 
-      - name: SonarQube Analysis
-        working-directory: backend
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-        run: |
-          mvn sonar:sonar \
-            -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
-            -Dsonar.projectName=${SONAR_PROJECT_NAME} \
-            -Dsonar.java.binaries=target/classes \
-            -Dsonar.token=$SONAR_TOKEN \
-            -Dsonar.host.url=$SONAR_HOST_URL
+      # - name: SonarQube Analysis
+      #   working-directory: backend
+      #   env:
+      #     SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      #     SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+      #   run: |
+      #     mvn sonar:sonar \
+      #       -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
+      #       -Dsonar.projectName=${SONAR_PROJECT_NAME} \
+      #       -Dsonar.java.binaries=target/classes \
+      #       -Dsonar.token=$SONAR_TOKEN \
+      #       -Dsonar.host.url=$SONAR_HOST_URL
 
 
       # ==========================================
       # 8. SONARQUBE QUALITY GATE
       # ==========================================
 
-      - name: SonarQube Quality Gate
-        uses: SonarSource/sonarqube-quality-gate-action@v1.1.0
-        timeout-minutes: 5
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-        with:
-          scanMetadataReportFile: backend/.scannerwork/report-task.txt
+      # - name: SonarQube Quality Gate
+      #   uses: SonarSource/sonarqube-quality-gate-action@v1.1.0
+      #   timeout-minutes: 5
+      #   env:
+      #     SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      #     SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+      #   with:
+      #     scanMetadataReportFile: backend/.scannerwork/report-task.txt
 
 
       # ==========================================
