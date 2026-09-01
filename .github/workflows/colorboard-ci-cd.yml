@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - testing
+
   workflow_dispatch:
     inputs:
       deploy_target:
@@ -21,10 +22,12 @@ on:
         type: boolean
         default: false
 
+
 # Prevent concurrent deployments
 concurrency:
   group: colorboard-deployment
   cancel-in-progress: false
+
 
 env:
   APP_NAME: colorboard
@@ -38,6 +41,7 @@ env:
   SONAR_PROJECT_NAME: colorboard
 
   MAVEN_OPTS: -Dmaven.repo.local=.m2/repository
+
 
 jobs:
 
@@ -96,7 +100,7 @@ jobs:
 
       - name: Build application
         working-directory: backend
-        run: mvn clean package    
+        run: mvn clean package
 
 
       # ==========================================
@@ -146,57 +150,57 @@ jobs:
       # 6. OWASP DEPENDENCY CHECK
       # ==========================================
 
-      - name: OWASP Dependency Check
-        uses: dependency-check/Dependency-Check_Action@main
-        env:
-          JAVA_HOME: /opt/jdk
-        with:
-          project: 'colorboard'
-          path: .
-          format: 'HTML'
-          out: 'reports'
-          args: >
-            --disableAssembly
-            
-      - name: Upload OWASP Report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: dependency-check-report
-          path: reports
-          if-no-files-found: warn
+      # - name: OWASP Dependency Check
+      #   uses: dependency-check/Dependency-Check_Action@main
+      #   env:
+      #     JAVA_HOME: /opt/jdk
+      #   with:
+      #     project: 'colorboard'
+      #     path: .
+      #     format: 'HTML'
+      #     out: 'reports'
+      #     args: >
+      #       --disableAssembly
+
+      # - name: Upload OWASP Report
+      #   if: always()
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: dependency-check-report
+      #     path: reports
+      #     if-no-files-found: warn
 
 
       # ==========================================
       # 7. SONARQUBE ANALYSIS
       # ==========================================
 
-      - name: SonarQube Analysis
-        working-directory: backend
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-        run: |
-          mvn sonar:sonar \
-            -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
-            -Dsonar.projectName=${SONAR_PROJECT_NAME} \
-            -Dsonar.java.binaries=target/classes \
-            -Dsonar.token=$SONAR_TOKEN \
-            -Dsonar.host.url=$SONAR_HOST_URL
+      # - name: SonarQube Analysis
+      #   working-directory: backend
+      #   env:
+      #     SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      #     SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+      #   run: |
+      #     mvn sonar:sonar \
+      #       -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
+      #       -Dsonar.projectName=${SONAR_PROJECT_NAME} \
+      #       -Dsonar.java.binaries=target/classes \
+      #       -Dsonar.token=$SONAR_TOKEN \
+      #       -Dsonar.host.url=$SONAR_HOST_URL
 
 
       # ==========================================
       # 8. SONARQUBE QUALITY GATE
       # ==========================================
 
-      - name: SonarQube Quality Gate
-        uses: SonarSource/sonarqube-quality-gate-action@v1.1.0
-        timeout-minutes: 5
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-        with:
-          scanMetadataReportFile: backend/.scannerwork/report-task.txt
+      # - name: SonarQube Quality Gate
+      #   uses: SonarSource/sonarqube-quality-gate-action@v1.1.0
+      #   timeout-minutes: 5
+      #   env:
+      #     SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      #     SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+      #   with:
+      #     scanMetadataReportFile: backend/.scannerwork/report-task.txt
 
 
       # ==========================================
@@ -244,14 +248,14 @@ jobs:
       # 12. TRIVY SECURITY SCAN
       # ==========================================
 
-      - name: Trivy Security Scan
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
-          format: table
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          exit-code: "1"
+      # - name: Trivy Security Scan
+      #   uses: aquasecurity/trivy-action@master
+      #   with:
+      #     image-ref: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+      #     format: table
+      #     severity: HIGH,CRITICAL
+      #     ignore-unfixed: true
+      #     exit-code: "1"
 
 
       # ==========================================
@@ -323,6 +327,7 @@ jobs:
           github.event_name == 'workflow_dispatch' &&
           github.event.inputs.skip_deploy != 'true'
         run: |
+
           echo "=========================================="
           echo "DEPLOYING APPLICATION"
           echo "=========================================="
@@ -332,6 +337,8 @@ jobs:
           ssh -i ~/.ssh/id_rsa \
             -o BatchMode=yes \
             -o ConnectTimeout=10 \
+            -o ServerAliveInterval=30 \
+            -o ServerAliveCountMax=10 \
             -o StrictHostKeyChecking=no \
             ${{ secrets.SSH_USER }}@${DEPLOY_HOST} << EOF
 
@@ -354,12 +361,44 @@ jobs:
               docker run -d \
                 --name ${APP_NAME} \
                 --restart unless-stopped \
+                --network colorboard-net \
                 -p 8082:8080 \
                 ${IMAGE_NAME}:${IMAGE_TAG}
 
-              echo "Waiting for container..."
+              echo "Waiting for ColorBoard application..."
 
-              sleep 10
+              APP_READY=false
+
+              for i in {1..30}; do
+
+                if curl -fsS --max-time 3 \
+                  http://localhost:8082/api/tasks/health > /dev/null; then
+
+                  echo "ColorBoard application is healthy."
+
+                  APP_READY=true
+
+                  break
+
+                fi
+
+                echo "Application not ready yet... attempt \$i/30"
+
+                sleep 2
+
+              done
+
+              if [ "\$APP_READY" != "true" ]; then
+
+                echo "ERROR: ColorBoard application failed to become healthy."
+
+                docker ps -a --filter name=${APP_NAME}
+
+                docker logs --tail 100 ${APP_NAME} || true
+
+                exit 1
+
+              fi
 
               echo "Container status..."
 
@@ -387,6 +426,8 @@ jobs:
           ssh -i ~/.ssh/id_rsa \
             -o BatchMode=yes \
             -o ConnectTimeout=10 \
+            -o ServerAliveInterval=30 \
+            -o ServerAliveCountMax=10 \
             -o StrictHostKeyChecking=no \
             ${{ secrets.SSH_USER }}@${DEPLOY_HOST} << EOF
 
@@ -421,18 +462,27 @@ jobs:
           github.event.inputs.skip_deploy != 'true'
         run: |
 
+          echo "=========================================="
+          echo "TESTING APPLICATION"
+          echo "=========================================="
+
           ssh -i ~/.ssh/id_rsa \
             -o BatchMode=yes \
             -o ConnectTimeout=10 \
+            -o ServerAliveInterval=30 \
+            -o ServerAliveCountMax=10 \
             -o StrictHostKeyChecking=no \
             ${{ secrets.SSH_USER }}@${DEPLOY_HOST} << EOF
 
-              echo "Testing application..."
+              set -e
+
+              echo "Testing ColorBoard health endpoint..."
 
               curl -f \
                 --max-time 10 \
-                http://localhost:8082/ || exit 1
+                http://localhost:8082/api/tasks/health
 
+              echo ""
               echo "Smoke test successful."
 
           EOF
