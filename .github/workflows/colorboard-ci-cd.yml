@@ -418,28 +418,36 @@ jobs:
       # 19. SMOKE TEST
       # ==========================================
 
-      # - name: Smoke Test
-      #   if: |
-      #     github.event_name == 'workflow_dispatch' &&
-      #     github.event.inputs.skip_deploy != 'true'
-      #   run: |
+      - name: Smoke Test
+        if: |
+          github.event_name == 'workflow_dispatch' &&
+          github.event.inputs.skip_deploy != 'true'
+        run: |
 
-      #     ssh -i ~/.ssh/id_rsa \
-      #       -o BatchMode=yes \
-      #       -o ConnectTimeout=10 \
-      #       -o StrictHostKeyChecking=no \
-      #       ${{ secrets.SSH_USER }}@${DEPLOY_HOST} << EOF
+          echo "=========================================="
+          echo "TESTING APPLICATION"
+          echo "=========================================="
 
-      #         echo "Testing application..."
+          ssh -i ~/.ssh/id_rsa \
+            -o BatchMode=yes \
+            -o ConnectTimeout=10 \
+            -o ServerAliveInterval=30 \
+            -o ServerAliveCountMax=10 \
+            -o StrictHostKeyChecking=no \
+            ${{ secrets.SSH_USER }}@${DEPLOY_HOST} << EOF
 
-      #         curl -f \
-      #           --max-time 10 \
-      #           http://localhost:8082/ || exit 1
+              set -e
 
-      #         echo "Smoke test successful."
+              echo "Testing ColorBoard health endpoint..."
 
-      #     EOF
+              curl -f \
+                --max-time 10 \
+                http://localhost:8082/api/tasks/health
 
+              echo ""
+              echo "Smoke test successful."
+
+          EOF
 
       # ==========================================
       # 20. SUCCESS
