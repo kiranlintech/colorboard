@@ -1,0 +1,488 @@
+name: ColorBoard CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - testing
+  workflow_dispatch:
+    inputs:
+      deploy_target:
+        description: "Select deployment target"
+        required: true
+        type: choice
+        options:
+          - HOMELAB
+          - VPS
+        default: VPS
+
+      skip_deploy:
+        description: "Build and scan only. Do not deploy."
+        required: true
+        type: boolean
+        default: false
+
+# Prevent concurrent deployments
+concurrency:
+  group: colorboard-deployment
+  cancel-in-progress: false
+
+env:
+  APP_NAME: colorboard
+  IMAGE_NAME: kiranlintech/colorboard
+  DOCKERFILE: backend/Dockerfile
+
+  HOMELAB_HOST: ${{ secrets.HOMELAB_HOST }}
+  VPS_HOST: ${{ secrets.VPS_HOST }}
+
+  SONAR_PROJECT_KEY: colorboard
+  SONAR_PROJECT_NAME: colorboard
+
+  MAVEN_OPTS: -Dmaven.repo.local=.m2/repository
+
+jobs:
+
+  build-test-scan-deploy:
+
+    name: Build, Scan and Deploy
+
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 30
+
+    steps:
+
+      # ==========================================
+      # 1. CHECKOUT
+      # ==========================================
+
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Display Git Information
+        run: |
+          echo "=========================================="
+          echo "CHECKOUT SOURCE CODE"
+          echo "=========================================="
+
+          echo "Git branch:"
+          git branch --show-current || true
+
+          echo "Git commit:"
+          git rev-parse HEAD
+
+          echo "Project files:"
+          find . -maxdepth 2 -type f | sort | head -100
+
+
+      # ==========================================
+      # 2. SETUP JAVA
+      # ==========================================
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Verify Java setup
+        run: |
+          echo "JAVA_HOME=$JAVA_HOME"
+          which java
+          java -version
+          javac -version
+
+      - name: Build application
+        working-directory: backend
+        run: mvn clean package    
+
+
+      # ==========================================
+      # 3. INITIALIZE VARIABLES
+      # ==========================================
+
+      - name: Initialize Build Variables
+        id: variables
+        run: |
+          GIT_COMMIT_SHORT=$(git rev-parse --short=7 HEAD)
+
+          IMAGE_TAG="${{ github.run_number }}-${GIT_COMMIT_SHORT}"
+
+          echo "GIT_COMMIT_SHORT=$GIT_COMMIT_SHORT" >> $GITHUB_ENV
+          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+
+          echo "Application : $APP_NAME"
+          echo "Build       : ${{ github.run_number }}"
+          echo "Git Commit  : $GIT_COMMIT_SHORT"
+          echo "Image Tag   : $IMAGE_TAG"
+
+
+      # ==========================================
+      # 4. MAVEN BUILD & TEST
+      # ==========================================
+
+      - name: Build and Test
+        working-directory: backend
+        run: |
+          mvn clean test package
+
+
+      # ==========================================
+      # 5. UPLOAD TEST RESULTS
+      # ==========================================
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-test-results
+          path: backend/target/surefire-reports/*.xml
+          if-no-files-found: warn
+
+
+      # ==========================================
+      # 6. OWASP DEPENDENCY CHECK
+      # ==========================================
+
+      # - name: OWASP Dependency Check
+      #   uses: dependency-check/Dependency-Check_Action@main
+      #   env:
+      #     JAVA_HOME: /opt/jdk
+      #   with:
+      #     project: 'colorboard'
+      #     path: .
+      #     format: 'HTML'
+      #     out: 'reports'
+      #     args: >
+      #       --disableAssembly
+            
+      # - name: Upload OWASP Report
+      #   if: always()
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: dependency-check-report
+      #     path: reports
+      #     if-no-files-found: warn
+
+
+      # ==========================================
+      # 7. SONARQUBE ANALYSIS
+      # ==========================================
+
+      # - name: SonarQube Analysis
+      #   working-directory: backend
+      #   env:
+      #     SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      #     SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+      #   run: |
+      #     mvn sonar:sonar \
+      #       -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
+      #       -Dsonar.projectName=${SONAR_PROJECT_NAME} \
+      #       -Dsonar.java.binaries=target/classes \
+      #       -Dsonar.token=$SONAR_TOKEN \
+      #       -Dsonar.host.url=$SONAR_HOST_URL
+
+
+      # ==========================================
+      # 8. SONARQUBE QUALITY GATE
+      # ==========================================
+
+      # - name: SonarQube Quality Gate
+      #   uses: SonarSource/sonarqube-quality-gate-action@v1.1.0
+      #   timeout-minutes: 5
+      #   env:
+      #     SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      #     SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+      #   with:
+      #     scanMetadataReportFile: backend/.scannerwork/report-task.txt
+
+
+      # ==========================================
+      # 9. PACKAGE APPLICATION
+      # ==========================================
+
+      - name: Package Application
+        working-directory: backend
+        run: |
+          echo "=========================================="
+          echo "PACKAGING APPLICATION"
+          echo "=========================================="
+
+          mvn clean package -DskipTests
+
+
+      # ==========================================
+      # 10. SETUP DOCKER BUILDX
+      # ==========================================
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+
+      # ==========================================
+      # 11. BUILD DOCKER IMAGE
+      # ==========================================
+
+      - name: Build Docker Image
+        run: |
+          echo "=========================================="
+          echo "BUILDING DOCKER IMAGE"
+          echo "=========================================="
+
+          docker build \
+            -f ${DOCKERFILE} \
+            -t ${IMAGE_NAME}:${IMAGE_TAG} \
+            -t ${IMAGE_NAME}:latest \
+            backend
+
+          docker images ${IMAGE_NAME}
+
+
+      # ==========================================
+      # 12. TRIVY SECURITY SCAN
+      # ==========================================
+
+      # - name: Trivy Security Scan
+      #   uses: aquasecurity/trivy-action@master
+      #   with:
+      #     image-ref: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+      #     format: table
+      #     severity: HIGH,CRITICAL
+      #     ignore-unfixed: true
+      #     exit-code: "1"
+
+
+      # ==========================================
+      # 13. LOGIN TO DOCKER HUB
+      # ==========================================
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+
+      # ==========================================
+      # 14. PUSH IMAGE TO DOCKER HUB
+      # ==========================================
+
+      - name: Push Docker Image
+        run: |
+          echo "=========================================="
+          echo "PUSHING IMAGE TO DOCKER HUB"
+          echo "=========================================="
+
+          docker push ${IMAGE_NAME}:${IMAGE_TAG}
+          docker push ${IMAGE_NAME}:latest
+
+
+      # ==========================================
+      # 15. SELECT DEPLOYMENT TARGET
+      # ==========================================
+
+      - name: Select Deployment Host
+        if: |
+          github.event_name == 'workflow_dispatch' &&
+          github.event.inputs.skip_deploy != 'true'
+        run: |
+
+          if [ "${{ github.event.inputs.deploy_target }}" = "HOMELAB" ]; then
+            echo "DEPLOY_HOST=${HOMELAB_HOST}" >> $GITHUB_ENV
+          else
+            echo "DEPLOY_HOST=${VPS_HOST}" >> $GITHUB_ENV
+          fi
+
+          echo "Deploying to: ${{ github.event.inputs.deploy_target }}"
+
+
+      # ==========================================
+      # 16. SETUP SSH KEY
+      # ==========================================
+
+      - name: Setup SSH Key
+        if: |
+          github.event_name == 'workflow_dispatch' &&
+          github.event.inputs.skip_deploy != 'true'
+        run: |
+          mkdir -p ~/.ssh
+
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+
+          chmod 600 ~/.ssh/id_rsa
+
+
+      # ==========================================
+      # 17. DEPLOY APPLICATION
+      # ==========================================
+
+      - name: Deploy Application
+        if: |
+          github.event_name == 'workflow_dispatch' &&
+          github.event.inputs.skip_deploy != 'true'
+        run: |
+          echo "=========================================="
+          echo "DEPLOYING APPLICATION"
+          echo "=========================================="
+
+          echo "Target Host: ${DEPLOY_HOST}"
+
+          ssh -i ~/.ssh/id_rsa \
+            -o BatchMode=yes \
+            -o ConnectTimeout=10 \
+            -o StrictHostKeyChecking=no \
+            ${{ secrets.SSH_USER }}@${DEPLOY_HOST} << EOF
+
+              set -e
+
+              echo "Pulling image..."
+
+              docker pull ${IMAGE_NAME}:${IMAGE_TAG}
+
+              echo "Stopping old container..."
+
+              docker stop ${APP_NAME} || true
+
+              echo "Removing old container..."
+
+              docker rm ${APP_NAME} || true
+
+              echo "Starting new container..."
+
+              docker run -d \
+                --name ${APP_NAME} \
+                --restart unless-stopped \
+                -p 8082:8080 \
+                ${IMAGE_NAME}:${IMAGE_TAG}
+
+              echo "Waiting for container..."
+
+              sleep 10
+
+              echo "Container status..."
+
+              docker ps --filter name=${APP_NAME}
+
+              echo "Checking container..."
+
+              docker inspect \
+                --format='{{.State.Status}}' \
+                ${APP_NAME}
+
+          EOF
+
+
+      # ==========================================
+      # 18. HEALTH CHECK
+      # ==========================================
+
+      - name: Deployment Health Check
+        if: |
+          github.event_name == 'workflow_dispatch' &&
+          github.event.inputs.skip_deploy != 'true'
+        run: |
+
+          ssh -i ~/.ssh/id_rsa \
+            -o BatchMode=yes \
+            -o ConnectTimeout=10 \
+            -o StrictHostKeyChecking=no \
+            ${{ secrets.SSH_USER }}@${DEPLOY_HOST} << EOF
+
+              set -e
+
+              echo "Checking container..."
+
+              docker ps --filter name=${APP_NAME}
+
+              if [ "\$(docker inspect -f '{{.State.Running}}' ${APP_NAME})" != "true" ]; then
+
+                echo "ERROR: Container is not running."
+
+                docker logs ${APP_NAME} || true
+
+                exit 1
+
+              fi
+
+              echo "Container is running successfully."
+
+          EOF
+
+
+      # ==========================================
+      # 19. SMOKE TEST
+      # ==========================================
+
+      - name: Smoke Test
+        if: |
+          github.event_name == 'workflow_dispatch' &&
+          github.event.inputs.skip_deploy != 'true'
+        run: |
+
+          ssh -i ~/.ssh/id_rsa \
+            -o BatchMode=yes \
+            -o ConnectTimeout=10 \
+            -o StrictHostKeyChecking=no \
+            ${{ secrets.SSH_USER }}@${DEPLOY_HOST} << EOF
+
+              echo "Testing application..."
+
+              curl -f \
+                --max-time 10 \
+                http://localhost:8082/ || exit 1
+
+              echo "Smoke test successful."
+
+          EOF
+
+
+      # ==========================================
+      # 20. SUCCESS
+      # ==========================================
+
+      - name: Deployment Successful
+        if: success()
+        run: |
+          echo "=========================================="
+          echo "colorboard DEPLOYMENT SUCCESSFUL"
+          echo "=========================================="
+
+          echo "Application : ${APP_NAME}"
+          echo "Image       : ${IMAGE_NAME}:${IMAGE_TAG}"
+
+          echo "=========================================="
+
+
+      # ==========================================
+      # 21. FAILURE
+      # ==========================================
+
+      - name: Pipeline Failed
+        if: failure()
+        run: |
+          echo "=========================================="
+          echo "colorboard PIPELINE FAILED"
+          echo "=========================================="
+
+          echo "Build       : ${{ github.run_number }}"
+          echo "Application : ${APP_NAME}"
+
+          echo "Check GitHub Actions logs for details."
+
+          echo "=========================================="
+
+
+      # ==========================================
+      # 22. CLEANUP
+      # ==========================================
+
+      - name: Cleanup
+        if: always()
+        run: |
+          echo "Cleaning unused Docker images..."
+
+          docker image prune -f || true
+
+          rm -f ~/.ssh/id_rsa || true
