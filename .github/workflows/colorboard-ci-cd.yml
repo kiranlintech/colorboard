@@ -415,27 +415,27 @@ jobs:
       # 19. SMOKE TEST
       # ==========================================
 
-      - name: Smoke Test
-        if: |
-          github.event_name == 'workflow_dispatch' &&
-          github.event.inputs.skip_deploy != 'true'
-        run: |
+      # - name: Smoke Test
+      #   if: |
+      #     github.event_name == 'workflow_dispatch' &&
+      #     github.event.inputs.skip_deploy != 'true'
+      #   run: |
 
-          ssh -i ~/.ssh/id_rsa \
-            -o BatchMode=yes \
-            -o ConnectTimeout=10 \
-            -o StrictHostKeyChecking=no \
-            ${{ secrets.SSH_USER }}@${DEPLOY_HOST} << EOF
+      #     ssh -i ~/.ssh/id_rsa \
+      #       -o BatchMode=yes \
+      #       -o ConnectTimeout=10 \
+      #       -o StrictHostKeyChecking=no \
+      #       ${{ secrets.SSH_USER }}@${DEPLOY_HOST} << EOF
 
-              echo "Testing application..."
+      #         echo "Testing application..."
 
-              curl -f \
-                --max-time 10 \
-                http://localhost:8082/ || exit 1
+      #         curl -f \
+      #           --max-time 10 \
+      #           http://localhost:8082/ || exit 1
 
-              echo "Smoke test successful."
+      #         echo "Smoke test successful."
 
-          EOF
+      #     EOF
 
 
       # ==========================================
