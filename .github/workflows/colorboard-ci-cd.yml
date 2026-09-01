@@ -21,109 +21,109 @@ on:
         required: true
         type: boolean
         default: false
+              EOF
 
-
-# Prevent concurrent deployments
-concurrency:
-  group: colorboard-deployment
-  cancel-in-progress: false
-
-
-env:
-  APP_NAME: colorboard
-  IMAGE_NAME: kiranlintech/colorboard
-  FRONTEND_IMAGE_NAME: kiranlintech/colorboard-frontend
-  DOCKERFILE: backend/Dockerfile
-
-  HOMELAB_HOST: ${{ secrets.HOMELAB_HOST }}
-  VPS_HOST: ${{ secrets.VPS_HOST }}
-
-  SONAR_PROJECT_KEY: colorboard
-  SONAR_PROJECT_NAME: colorboard
-
-  MAVEN_OPTS: -Dmaven.repo.local=.m2/repository
-
-
-jobs:
-
-  build-test-scan-deploy:
-
-    name: Build, Scan and Deploy
-
-    runs-on: ubuntu-latest
-
-    timeout-minutes: 30
-
-    steps:
 
       # ==========================================
-      # 1. CHECKOUT
+      # 18. HEALTH CHECK
       # ==========================================
 
-      - name: Checkout Source Code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Display Git Information
+      - name: Deployment Health Check
+        if: |
+          github.event_name == 'workflow_dispatch' &&
+          github.event.inputs.skip_deploy != 'true'
         run: |
+
+          ssh -i ~/.ssh/id_rsa \
+            -o BatchMode=yes \
+            -o ConnectTimeout=10 \
+            -o ServerAliveInterval=30 \
+            -o ServerAliveCountMax=10 \
+            -o StrictHostKeyChecking=no \
+            ${{ secrets.SSH_USER }}@${DEPLOY_HOST} << EOF
+
+              set -e
+
+              echo "Checking backend container..."
+
+              if [ "$(docker inspect -f '{{.State.Running}}' ${APP_NAME})" != "true" ]; then
+                echo "ERROR: Backend container is not running."
+                docker logs ${APP_NAME} || true
+                exit 1
+              fi
+
+              echo "Backend container is running."
+
+              echo "Checking NGINX container..."
+
+              if [ "$(docker inspect -f '{{.State.Running}}' colorboard-nginx)" != "true" ]; then
+                echo "ERROR: NGINX container is not running."
+                docker logs colorboard-nginx || true
+                exit 1
+              fi
+
+              echo "NGINX container is running."
+
+              echo "Health check through NGINX..."
+
+              curl -f \
+                --max-time 10 \
+                http://localhost:8087/api/tasks/health
+
+              echo ""
+              echo "Deployment health check successful."
+
+          EOF
+
+      # ==========================================
+      # 19. SMOKE TEST
+      # ==========================================
+
+      - name: Smoke Test
+        if: |
+          github.event_name == 'workflow_dispatch' &&
+          github.event.inputs.skip_deploy != 'true'
+        run: |
+
           echo "=========================================="
-          echo "CHECKOUT SOURCE CODE"
+          echo "COLORBOARD SMOKE TEST"
           echo "=========================================="
 
-          echo "Git branch:"
-          git branch --show-current || true
+          ssh -i ~/.ssh/id_rsa \
+            -o BatchMode=yes \
+            -o ConnectTimeout=10 \
+            -o ServerAliveInterval=30 \
+            -o ServerAliveCountMax=10 \
+            -o StrictHostKeyChecking=no \
+            ${{ secrets.SSH_USER }}@${DEPLOY_HOST} << EOF
 
-          echo "Git commit:"
-          git rev-parse HEAD
+              set -e
 
-          echo "Project files:"
-          find . -maxdepth 2 -type f | sort | head -100
+              echo "Testing ColorBoard UI..."
 
+              curl -f \
+                --max-time 10 \
+                http://localhost:8087/ > /tmp/colorboard.html
 
-      # ==========================================
-      # 2. SETUP JAVA
-      # ==========================================
+              grep -q "ColorBoard" /tmp/colorboard.html
 
-      - name: Set up JDK
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "21"
-          cache: maven
+              echo "UI smoke test successful."
 
-      - name: Verify Java setup
-        run: |
-          echo "JAVA_HOME=$JAVA_HOME"
-          which java
-          java -version
-          javac -version
+              echo "Testing ColorBoard API..."
 
-      - name: Build application
-        working-directory: backend
-        run: mvn clean package
+              curl -f \
+                --max-time 10 \
+                http://localhost:8087/api/tasks/health
 
+              echo ""
+              echo "API smoke test successful."
 
-      # ==========================================
-      # 3. INITIALIZE VARIABLES
-      # ==========================================
+              echo ""
+              echo "=========================================="
+              echo "ALL SMOKE TESTS PASSED"
+              echo "=========================================="
 
-      - name: Initialize Build Variables
-        id: variables
-        run: |
-          GIT_COMMIT_SHORT=$(git rev-parse --short=7 HEAD)
-
-          IMAGE_TAG="${{ github.run_number }}-${GIT_COMMIT_SHORT}"
-
-          echo "GIT_COMMIT_SHORT=$GIT_COMMIT_SHORT" >> $GITHUB_ENV
-          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
-
-          echo "Application : $APP_NAME"
-          echo "Build       : ${{ github.run_number }}"
-          echo "Git Commit  : $GIT_COMMIT_SHORT"
-          echo "Image Tag   : $IMAGE_TAG"
-
-
+          EOF
       # ==========================================
       # 4. MAVEN BUILD & TEST
       # ==========================================
