@@ -3,7 +3,7 @@ name: ColorBoard CI/CD Pipeline
 on:
   push:
     branches:
-      - testing
+      - kiran
 
   workflow_dispatch:
     inputs:
