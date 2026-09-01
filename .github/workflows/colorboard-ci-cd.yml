@@ -354,6 +354,7 @@ jobs:
               docker run -d \
                 --name ${APP_NAME} \
                 --restart unless-stopped \
+                --network colorboard-net \
                 -p 8082:8080 \
                 ${IMAGE_NAME}:${IMAGE_TAG}
 
