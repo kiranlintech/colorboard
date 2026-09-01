@@ -21,109 +21,61 @@ on:
         required: true
         type: boolean
         default: false
-              EOF
+
+env:
+  IMAGE_NAME: kiranlintech/colorboard
+  FRONTEND_IMAGE_NAME: kiranlintech/colorboard-nginx
+  IMAGE_TAG: ${{ github.run_number }}
+  DOCKERFILE: backend/Dockerfile
+  APP_NAME: colorboard
+
+  HOMELAB_HOST: ${{ secrets.HOMELAB_HOST }}
+  VPS_HOST: ${{ secrets.VPS_HOST }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # ==========================================
+      # 1. CHECKOUT
+      # ==========================================
+
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
 
 
       # ==========================================
-      # 18. HEALTH CHECK
+      # 2. SETUP JAVA
       # ==========================================
 
-      - name: Deployment Health Check
-        if: |
-          github.event_name == 'workflow_dispatch' &&
-          github.event.inputs.skip_deploy != 'true'
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+
+      # ==========================================
+      # 3. VERIFY ENVIRONMENT
+      # ==========================================
+
+      - name: Verify Environment
         run: |
+          echo "Java version:"
+          java -version
 
-          ssh -i ~/.ssh/id_rsa \
-            -o BatchMode=yes \
-            -o ConnectTimeout=10 \
-            -o ServerAliveInterval=30 \
-            -o ServerAliveCountMax=10 \
-            -o StrictHostKeyChecking=no \
-            ${{ secrets.SSH_USER }}@${DEPLOY_HOST} << EOF
+          echo ""
+          echo "Maven version:"
+          mvn -version
 
-              set -e
+          echo ""
+          echo "Docker version:"
+          docker --version
 
-              echo "Checking backend container..."
 
-              if [ "$(docker inspect -f '{{.State.Running}}' ${APP_NAME})" != "true" ]; then
-                echo "ERROR: Backend container is not running."
-                docker logs ${APP_NAME} || true
-                exit 1
-              fi
-
-              echo "Backend container is running."
-
-              echo "Checking NGINX container..."
-
-              if [ "$(docker inspect -f '{{.State.Running}}' colorboard-nginx)" != "true" ]; then
-                echo "ERROR: NGINX container is not running."
-                docker logs colorboard-nginx || true
-                exit 1
-              fi
-
-              echo "NGINX container is running."
-
-              echo "Health check through NGINX..."
-
-              curl -f \
-                --max-time 10 \
-                http://localhost:8087/api/tasks/health
-
-              echo ""
-              echo "Deployment health check successful."
-
-          EOF
-
-      # ==========================================
-      # 19. SMOKE TEST
-      # ==========================================
-
-      - name: Smoke Test
-        if: |
-          github.event_name == 'workflow_dispatch' &&
-          github.event.inputs.skip_deploy != 'true'
-        run: |
-
-          echo "=========================================="
-          echo "COLORBOARD SMOKE TEST"
-          echo "=========================================="
-
-          ssh -i ~/.ssh/id_rsa \
-            -o BatchMode=yes \
-            -o ConnectTimeout=10 \
-            -o ServerAliveInterval=30 \
-            -o ServerAliveCountMax=10 \
-            -o StrictHostKeyChecking=no \
-            ${{ secrets.SSH_USER }}@${DEPLOY_HOST} << EOF
-
-              set -e
-
-              echo "Testing ColorBoard UI..."
-
-              curl -f \
-                --max-time 10 \
-                http://localhost:8087/ > /tmp/colorboard.html
-
-              grep -q "ColorBoard" /tmp/colorboard.html
-
-              echo "UI smoke test successful."
-
-              echo "Testing ColorBoard API..."
-
-              curl -f \
-                --max-time 10 \
-                http://localhost:8087/api/tasks/health
-
-              echo ""
-              echo "API smoke test successful."
-
-              echo ""
-              echo "=========================================="
-              echo "ALL SMOKE TESTS PASSED"
-              echo "=========================================="
-
-          EOF
       # ==========================================
       # 4. MAVEN BUILD & TEST
       # ==========================================
@@ -151,15 +103,17 @@ on:
       # 6. OWASP DEPENDENCY CHECK
       # ==========================================
 
+      # Uncomment when OWASP Dependency Check is required.
+
       # - name: OWASP Dependency Check
       #   uses: dependency-check/Dependency-Check_Action@main
       #   env:
       #     JAVA_HOME: /opt/jdk
       #   with:
-      #     project: 'colorboard'
+      #     project: "colorboard"
       #     path: .
-      #     format: 'HTML'
-      #     out: 'reports'
+      #     format: "HTML"
+      #     out: "reports"
       #     args: >
       #       --disableAssembly
 
@@ -175,6 +129,8 @@ on:
       # ==========================================
       # 7. SONARQUBE ANALYSIS
       # ==========================================
+
+      # Uncomment when SonarQube is configured.
 
       # - name: SonarQube Analysis
       #   working-directory: backend
@@ -227,19 +183,19 @@ on:
 
 
       # ==========================================
-      # 11. BUILD DOCKER IMAGE
+      # 11. BUILD DOCKER IMAGES
       # ==========================================
 
-      - name: Build Docker Image
+      - name: Build Docker Images
         run: |
           echo "=========================================="
           echo "BUILDING BACKEND DOCKER IMAGE"
           echo "=========================================="
 
           docker build \
-            -f ${DOCKERFILE} \
-            -t ${IMAGE_NAME}:${IMAGE_TAG} \
-            -t ${IMAGE_NAME}:latest \
+            -f "${DOCKERFILE}" \
+            -t "${IMAGE_NAME}:${IMAGE_TAG}" \
+            -t "${IMAGE_NAME}:latest" \
             backend
 
           echo "=========================================="
@@ -247,19 +203,24 @@ on:
           echo "=========================================="
 
           docker build \
-          -f nginx/Dockerfile \
-          -t ${FRONTEND_IMAGE_NAME}:${IMAGE_TAG} \
-          -t ${FRONTEND_IMAGE_NAME}:latest \
+            -f nginx/Dockerfile \
+            -t "${FRONTEND_IMAGE_NAME}:${IMAGE_TAG}" \
+            -t "${FRONTEND_IMAGE_NAME}:latest" \
             .
 
-          echo "Docker images:"
-          
-          docker images ${IMAGE_NAME}
+          echo "=========================================="
+          echo "DOCKER IMAGES"
+          echo "=========================================="
+
+          docker images "${IMAGE_NAME}"
+          docker images "${FRONTEND_IMAGE_NAME}"
 
 
       # ==========================================
       # 12. TRIVY SECURITY SCAN
       # ==========================================
+
+      # Uncomment when Trivy scanning is required.
 
       # - name: Trivy Security Scan
       #   uses: aquasecurity/trivy-action@master
@@ -283,22 +244,24 @@ on:
 
 
       # ==========================================
-      # 14. PUSH IMAGE TO DOCKER HUB
+      # 14. PUSH IMAGES TO DOCKER HUB
       # ==========================================
 
-      - name: Push Docker Image
+      - name: Push Docker Images
         run: |
           echo "=========================================="
           echo "PUSHING IMAGES TO DOCKER HUB"
           echo "=========================================="
 
           echo "Pushing backend image..."
-          docker push ${IMAGE_NAME}:${IMAGE_TAG}
-          docker push ${IMAGE_NAME}:latest
+
+          docker push "${IMAGE_NAME}:${IMAGE_TAG}"
+          docker push "${IMAGE_NAME}:latest"
 
           echo "Pushing frontend/NGINX image..."
-          docker push ${FRONTEND_IMAGE_NAME}:${IMAGE_TAG}
-          docker push ${FRONTEND_IMAGE_NAME}:latest
+
+          docker push "${FRONTEND_IMAGE_NAME}:${IMAGE_TAG}"
+          docker push "${FRONTEND_IMAGE_NAME}:latest"
 
 
       # ==========================================
@@ -310,11 +273,10 @@ on:
           github.event_name == 'workflow_dispatch' &&
           github.event.inputs.skip_deploy != 'true'
         run: |
-
           if [ "${{ github.event.inputs.deploy_target }}" = "HOMELAB" ]; then
-            echo "DEPLOY_HOST=${HOMELAB_HOST}" >> $GITHUB_ENV
+            echo "DEPLOY_HOST=${HOMELAB_HOST}" >> "$GITHUB_ENV"
           else
-            echo "DEPLOY_HOST=${VPS_HOST}" >> $GITHUB_ENV
+            echo "DEPLOY_HOST=${VPS_HOST}" >> "$GITHUB_ENV"
           fi
 
           echo "Deploying to: ${{ github.event.inputs.deploy_target }}"
@@ -345,7 +307,6 @@ on:
           github.event_name == 'workflow_dispatch' &&
           github.event.inputs.skip_deploy != 'true'
         run: |
-
           echo "=========================================="
           echo "DEPLOYING APPLICATION"
           echo "=========================================="
@@ -358,216 +319,216 @@ on:
             -o ServerAliveInterval=30 \
             -o ServerAliveCountMax=10 \
             -o StrictHostKeyChecking=no \
-            ${{ secrets.SSH_USER }}@${DEPLOY_HOST} << EOF
+            "${{ secrets.SSH_USER }}@${DEPLOY_HOST}" << EOF
 
-              set -e
+          set -e
 
-              echo "=========================================="
-              echo "PULLING BACKEND IMAGE"
-              echo "=========================================="
+          echo "=========================================="
+          echo "PULLING BACKEND IMAGE"
+          echo "=========================================="
 
-              docker pull ${IMAGE_NAME}:${IMAGE_TAG}
+          docker pull ${IMAGE_NAME}:${IMAGE_TAG}
 
-              echo "=========================================="
-              echo "PULLING FRONTEND/NGINX IMAGE"
-              echo "=========================================="
+          echo "=========================================="
+          echo "PULLING FRONTEND/NGINX IMAGE"
+          echo "=========================================="
 
-              docker pull ${FRONTEND_IMAGE_NAME}:${IMAGE_TAG}  
+          docker pull ${FRONTEND_IMAGE_NAME}:${IMAGE_TAG}
 
-              echo "=========================================="
-              echo "STOPPING OLD NGINX CONTAINER"
-              echo "=========================================="
+          echo "=========================================="
+          echo "STOPPING OLD NGINX CONTAINER"
+          echo "=========================================="
 
-              docker stop colorboard-nginx || true
-              docker rm colorboard-nginx || true
+          docker stop colorboard-nginx || true
+          docker rm colorboard-nginx || true
 
-              echo "=========================================="
-              echo "STOPPING OLD BACKEND CONTAINER"
-              echo "=========================================="
+          echo "=========================================="
+          echo "STOPPING OLD BACKEND CONTAINER"
+          echo "=========================================="
 
-              docker stop ${APP_NAME} || true
-              docker rm ${APP_NAME} || true
+          docker stop ${APP_NAME} || true
+          docker rm ${APP_NAME} || true
 
-              echo "=========================================="
-              echo "STARTING BACKEND"
-              echo "=========================================="
+          echo "=========================================="
+          echo "STARTING BACKEND"
+          echo "=========================================="
 
-              docker run -d \
-                --name ${APP_NAME} \
-                --restart unless-stopped \
-                --network colorboard-net \
-                --network-alias backend \
-                ${IMAGE_NAME}:${IMAGE_TAG}
+          docker run -d \
+            --name ${APP_NAME} \
+            --restart unless-stopped \
+            --network colorboard-net \
+            --network-alias backend \
+            ${IMAGE_NAME}:${IMAGE_TAG}
 
-              echo "=========================================="
-              echo "STARTING NGINX / FRONTEND"
-              echo "=========================================="
+          echo "=========================================="
+          echo "STARTING NGINX / FRONTEND"
+          echo "=========================================="
 
-              docker run -d \
-                --name colorboard-nginx \
-                --restart unless-stopped \
-                --network colorboard-net \
-                -p 8087:80 \
-                ${FRONTEND_IMAGE_NAME}:${IMAGE_TAG}
+          docker run -d \
+            --name colorboard-nginx \
+            --restart unless-stopped \
+            --network colorboard-net \
+            -p 8087:80 \
+            ${FRONTEND_IMAGE_NAME}:${IMAGE_TAG}
 
-              echo "=========================================="
-              echo "WAITING FOR COLORBOARD"
-              echo "=========================================="
+          echo "=========================================="
+          echo "WAITING FOR COLORBOARD"
+          echo "=========================================="
 
-              APP_READY=false
+          APP_READY=false
 
-              for i in {1..30}; do
+          for i in {1..30}; do
 
-              if curl -fsS --max-time 3 \
-                    http://localhost:8087/api/tasks/health > /dev/null; then
+            if curl -fsS \
+              --max-time 3 \
+              http://localhost:8087/api/tasks/health > /dev/null; then
 
-                    echo "ColorBoard backend is healthy through NGINX."
+              echo "ColorBoard backend is healthy through NGINX."
 
-                    APP_READY=true
-                    break
+              APP_READY=true
+              break
+            fi
 
-                fi
+            echo "Application not ready yet... attempt \$i/30"
 
-                echo "Application not ready yet... attempt \$i/30"
+            sleep 2
 
-                sleep 2
+          done
 
-                done
+          if [ "\$APP_READY" != "true" ]; then
 
-                if [ "\$APP_READY" != "true" ]; then
+            echo "ERROR: ColorBoard failed health check."
 
-                echo "ERROR: ColorBoard failed health check."
+            echo "Backend container:"
+            docker ps -a --filter name=${APP_NAME}
 
-                echo "Backend container:"
-                docker ps -a --filter name=${APP_NAME}
+            echo "NGINX container:"
+            docker ps -a --filter name=colorboard-nginx
 
-                echo "NGINX container:"
-                docker ps -a --filter name=colorboard-nginx
+            echo "Backend logs:"
+            docker logs --tail 100 ${APP_NAME} || true
 
-                echo "Backend logs:"
-                docker logs --tail 100 ${APP_NAME} || true
+            echo "NGINX logs:"
+            docker logs --tail 100 colorboard-nginx || true
 
-                echo "NGINX logs:"
-                docker logs --tail 100 colorboard-nginx || true
+            exit 1
 
-                exit 1
+          fi
 
-                fi
+          echo "=========================================="
+          echo "VERIFYING CONTAINERS"
+          echo "=========================================="
 
-              echo "=========================================="
-              echo "VERIFYING CONTAINERS"
-              echo "=========================================="
+          docker ps --filter name=${APP_NAME}
+          docker ps --filter name=colorboard-nginx
 
-              docker ps --filter name=${APP_NAME}
-              docker ps --filter name=colorboard-nginx
+          echo "=========================================="
+          echo "COLORBOARD DEPLOYMENT READY"
+          echo "=========================================="
 
-              echo "=========================================="
-              echo "COLORBOARD DEPLOYMENT READY"
-              echo "=========================================="
+          EOF
 
-              EOF
+
+      # ==========================================
+      # 18. HEALTH CHECK
+      # ==========================================
+
+      - name: Deployment Health Check
+        if: |
+          github.event_name == 'workflow_dispatch' &&
+          github.event.inputs.skip_deploy != 'true'
+        run: |
+          ssh -i ~/.ssh/id_rsa \
+            -o BatchMode=yes \
+            -o ConnectTimeout=10 \
+            -o ServerAliveInterval=30 \
+            -o ServerAliveCountMax=10 \
+            -o StrictHostKeyChecking=no \
+            "${{ secrets.SSH_USER }}@${DEPLOY_HOST}" << EOF
+
+          set -e
+
+          echo "Checking backend container..."
+
+          if [ "\$(docker inspect -f '{{.State.Running}}' ${APP_NAME})" != "true" ]; then
+            echo "ERROR: Backend container is not running."
+            docker logs ${APP_NAME} || true
+            exit 1
+          fi
+
+          echo "Backend container is running."
+
+          echo "Checking NGINX container..."
+
+          if [ "\$(docker inspect -f '{{.State.Running}}' colorboard-nginx)" != "true" ]; then
+            echo "ERROR: NGINX container is not running."
+            docker logs colorboard-nginx || true
+            exit 1
+          fi
+
+          echo "NGINX container is running."
+
+          echo "Health check through NGINX..."
+
+          curl -f \
+            --max-time 10 \
+            http://localhost:8087/api/tasks/health
+
+          echo ""
+          echo "Deployment health check successful."
+
+          EOF
 
 
       # ==========================================
-# 18. HEALTH CHECK
-# ==========================================
-
-- name: Deployment Health Check
-  if: |
-    github.event_name == 'workflow_dispatch' &&
-    github.event.inputs.skip_deploy != 'true'
-  run: |
-
-    ssh -i ~/.ssh/id_rsa \
-      -o BatchMode=yes \
-      -o ConnectTimeout=10 \
-      -o ServerAliveInterval=30 \
-      -o ServerAliveCountMax=10 \
-      -o StrictHostKeyChecking=no \
-      ${{ secrets.SSH_USER }}@${DEPLOY_HOST} << EOF
-
-        set -e
-
-        echo "Checking backend container..."
-
-        if [ "\$(docker inspect -f '{{.State.Running}}' ${APP_NAME})" != "true" ]; then
-          echo "ERROR: Backend container is not running."
-          docker logs ${APP_NAME} || true
-          exit 1
-        fi
-
-        echo "Backend container is running."
-
-        echo "Checking NGINX container..."
-
-        if [ "\$(docker inspect -f '{{.State.Running}}' colorboard-nginx)" != "true" ]; then
-          echo "ERROR: NGINX container is not running."
-          docker logs colorboard-nginx || true
-          exit 1
-        fi
-
-        echo "NGINX container is running."
-
-        echo "Health check through NGINX..."
-
-        curl -f \
-          --max-time 10 \
-          http://localhost:8087/api/tasks/health
-
-        echo ""
-        echo "Deployment health check successful."
-
-    EOF
-
+      # 19. SMOKE TEST
       # ==========================================
-# 19. SMOKE TEST
-# ==========================================
 
-- name: Smoke Test
-  if: |
-    github.event_name == 'workflow_dispatch' &&
-    github.event.inputs.skip_deploy != 'true'
-  run: |
+      - name: Smoke Test
+        if: |
+          github.event_name == 'workflow_dispatch' &&
+          github.event.inputs.skip_deploy != 'true'
+        run: |
+          echo "=========================================="
+          echo "COLORBOARD SMOKE TEST"
+          echo "=========================================="
 
-    echo "=========================================="
-    echo "COLORBOARD SMOKE TEST"
-    echo "=========================================="
+          ssh -i ~/.ssh/id_rsa \
+            -o BatchMode=yes \
+            -o ConnectTimeout=10 \
+            -o ServerAliveInterval=30 \
+            -o ServerAliveCountMax=10 \
+            -o StrictHostKeyChecking=no \
+            "${{ secrets.SSH_USER }}@${DEPLOY_HOST}" << EOF
 
-    ssh -i ~/.ssh/id_rsa \
-      -o BatchMode=yes \
-      -o ConnectTimeout=10 \
-      -o ServerAliveInterval=30 \
-      -o ServerAliveCountMax=10 \
-      -o StrictHostKeyChecking=no \
-      ${{ secrets.SSH_USER }}@${DEPLOY_HOST} << EOF
+          set -e
 
-        set -e
+          echo "Testing ColorBoard UI..."
 
-        echo "Testing ColorBoard UI..."
+          curl -f \
+            --max-time 10 \
+            http://localhost:8087/ > /tmp/colorboard.html
 
-        curl -f \
-          --max-time 10 \
-          http://localhost:8087/ > /tmp/colorboard.html
+          grep -q "ColorBoard" /tmp/colorboard.html
 
-        grep -q "ColorBoard" /tmp/colorboard.html
+          echo "UI smoke test successful."
 
-        echo "UI smoke test successful."
+          echo "Testing ColorBoard API..."
 
-        echo "Testing ColorBoard API..."
+          curl -f \
+            --max-time 10 \
+            http://localhost:8087/api/tasks/health
 
-        curl -f \
-          --max-time 10 \
-          http://localhost:8087/api/tasks/health
+          echo ""
+          echo "API smoke test successful."
 
-        echo ""
-        echo "API smoke test successful."
+          echo ""
+          echo "=========================================="
+          echo "ALL SMOKE TESTS PASSED"
+          echo "=========================================="
 
-        echo ""
-        echo "=========================================="
-        echo "ALL SMOKE TESTS PASSED"
-        echo "=========================================="
+          EOF
 
-    EOF
 
       # ==========================================
       # 20. SUCCESS
@@ -577,7 +538,7 @@ on:
         if: success()
         run: |
           echo "=========================================="
-          echo "colorboard DEPLOYMENT SUCCESSFUL"
+          echo "COLORBOARD DEPLOYMENT SUCCESSFUL"
           echo "=========================================="
 
           echo "Application : ${APP_NAME}"
@@ -594,7 +555,7 @@ on:
         if: failure()
         run: |
           echo "=========================================="
-          echo "colorboard PIPELINE FAILED"
+          echo "COLORBOARD PIPELINE FAILED"
           echo "=========================================="
 
           echo "Build       : ${{ github.run_number }}"
