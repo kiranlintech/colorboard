@@ -333,6 +333,8 @@ jobs:
             -o BatchMode=yes \
             -o ConnectTimeout=10 \
             -o StrictHostKeyChecking=no \
+            -o ServerAliveInterval=30 \
+            -o ServerAliveCountMax=10 \
             ${{ secrets.SSH_USER }}@${DEPLOY_HOST} << EOF
 
               set -e
