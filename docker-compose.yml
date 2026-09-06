@@ -25,10 +25,10 @@ services:
       DB_URL: jdbc:mysql://mysql:3306/colorboard
       DB_USER: colorboard
       DB_PASSWORD: colorboard123
-    depends_on:
-      mysql:
-        condition: service_healthy
-    networks: [colorboard]
+  depends_on:
+    mysql:
+      condition: service_healthy
+  networks: [colorboard]
 
   nginx:
     image: nginx:1.29-alpine
