@@ -27,10 +27,12 @@ pipeline {
                 sh '''
                     echo "===== WORKSPACE ====="
                     pwd
-                    ls -la
 
-                    echo "===== PROJECT FILES ====="
-                    find . -maxdepth 2 -type f | sort | head -100
+                    echo "===== PROJECT STRUCTURE ====="
+                    find . -maxdepth 4 -type f | sort
+
+                    echo "===== POM FILES ====="
+                    find . -name "pom.xml" -type f
                 '''
             }
         }
@@ -48,16 +50,62 @@ pipeline {
             }
         }
 
-        stage('Build & SonarQube Analysis') {
+        stage('Build') {
             steps {
-                withSonarQubeEnv('sonarqube') {
-                    sh '''
-                        mvn clean package sonar:sonar \
-                            -DskipTests \
-                            -Dsonar.projectKey=colorboard \
-                            -Dsonar.projectName=colorboard \
-                            -Dsonar.exclusions=assets/**
-                    '''
+                script {
+                    def pomPath = sh(
+                        script: 'find . -name "pom.xml" -type f | head -1',
+                        returnStdout: true
+                    ).trim()
+
+                    if (!pomPath) {
+                        error("pom.xml not found in Jenkins workspace")
+                    }
+
+                    def pomDir = sh(
+                        script: "dirname '${pomPath}'",
+                        returnStdout: true
+                    ).trim()
+
+                    echo "Found pom.xml: ${pomPath}"
+                    echo "Maven project directory: ${pomDir}"
+
+                    dir(pomDir) {
+                        sh 'mvn clean package -DskipTests'
+                    }
+                }
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+                script {
+                    def pomPath = sh(
+                        script: 'find . -name "pom.xml" -type f | head -1',
+                        returnStdout: true
+                    ).trim()
+
+                    if (!pomPath) {
+                        error("pom.xml not found in Jenkins workspace")
+                    }
+
+                    def pomDir = sh(
+                        script: "dirname '${pomPath}'",
+                        returnStdout: true
+                    ).trim()
+
+                    echo "Running SonarQube from: ${pomDir}"
+
+                    dir(pomDir) {
+                        withSonarQubeEnv('sonarqube') {
+                            sh '''
+                                mvn sonar:sonar \
+                                    -Dsonar.projectKey=colorboard \
+                                    -Dsonar.projectName=colorboard \
+                                    -Dsonar.exclusions=assets/**
+                            '''
+                        }
+                    }
                 }
             }
         }
