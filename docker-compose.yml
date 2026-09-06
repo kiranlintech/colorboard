@@ -18,7 +18,7 @@ services:
       retries: 10
 
   backend:
-    build: ./backend
+    image: kiranlintech/colorboard:latest
     container_name: colorboard-backend
     restart: unless-stopped
     environment:
