@@ -177,7 +177,7 @@ pipeline {
                         docker run -d \
                           --name colorboard \
                           --restart unless-stopped \
-                          -p 8082:8080 \
+                          -p 8087:8080 \
                           ${IMAGE_NAME}:latest
                     '
                     """
