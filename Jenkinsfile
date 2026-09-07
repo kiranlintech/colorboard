@@ -1,4 +1,5 @@
 pipeline {
+
     agent any
 
     parameters {
@@ -10,34 +11,36 @@ pipeline {
     }
 
     environment {
-        IMAGE_NAME = "kiranlintech/colorboard"
-        IMAGE_TAG  = "${BUILD_NUMBER}"
+        BACKEND_IMAGE = "kiranlintech/colorboard"
+        NGINX_IMAGE   = "kiranlintech/colorboard-nginx"
+
+        IMAGE_TAG = "${BUILD_NUMBER}"
 
         HOMELAB_HOST = "192.168.5.9"
         VPS_HOST     = "213.210.37.106"
     }
 
     stages {
+
         stage('Checkout') {
             steps {
                 git branch: 'main',
                     url: 'https://github.com/kiranlintech/colorboard.git'
 
                 sh '''
-echo "===== WORKSPACE ====="
-pwd
+                    echo "===== Workspace ====="
+                    pwd
 
-echo "===== PROJECT STRUCTURE ====="
-find . -maxdepth 4 -type f | sort
-
-echo "===== POM FILES ====="
-find . -name "pom.xml" -type f
+                    echo "===== Project Structure ====="
+                    find . -maxdepth 3 -type f | sort
                 '''
             }
         }
 
+
         stage('OWASP Dependency Check') {
             steps {
+
                 dependencyCheck(
                     additionalArguments: '--scan ./',
                     odcInstallation: 'OWASP-Dependency-Check'
@@ -49,91 +52,92 @@ find . -name "pom.xml" -type f
             }
         }
 
+
         stage('Build') {
             steps {
-                script {
-                    def pomPath = sh(
-                        script: 'find . -name "pom.xml" -type f | head -1',
-                        returnStdout: true
-                    ).trim()
-
-                    if (!pomPath) {
-                        error("pom.xml not found in Jenkins workspace")
-                    }
-
-                    def pomDir = sh(
-                        script: "dirname '${pomPath}'",
-                        returnStdout: true
-                    ).trim()
-
-                    echo "Found pom.xml: ${pomPath}"
-                    echo "Maven project directory: ${pomDir}"
-
-                    dir(pomDir) {
-                        sh 'mvn clean package -DskipTests'
-                    }
-                }
+                sh '''
+                    cd backend
+                    mvn clean package -DskipTests
+                '''
             }
         }
+
 
         stage('SonarQube Analysis') {
             steps {
+
                 script {
-                    def pomPath = sh(
-                        script: 'find . -name "pom.xml" -type f | head -1',
-                        returnStdout: true
-                    ).trim()
 
-                    if (!pomPath) {
-                        error("pom.xml not found in Jenkins workspace")
-                    }
+                    withSonarQubeEnv('sonarqube') {
 
-                    def pomDir = sh(
-                        script: "dirname '${pomPath}'",
-                        returnStdout: true
-                    ).trim()
+                        sh '''
+                            cd backend
 
-                    echo "Running SonarQube from: ${pomDir}"
-
-                    dir(pomDir) {
-                        withSonarQubeEnv('sonarqube') {
-                            sh '''
-mvn sonar:sonar \
--Dsonar.projectKey=colorboard \
--Dsonar.projectName=colorboard \
--Dsonar.exclusions=assets/**
-                            '''
-                        }
+                            mvn sonar:sonar \
+                              -Dsonar.projectKey=colorboard \
+                              -Dsonar.projectName=colorboard \
+                              -Dsonar.exclusions=assets/**
+                        '''
                     }
                 }
             }
         }
 
-        stage('Build Docker Image') {
-            steps {
-                sh """
-docker build \
--f docker/Dockerfile \
--t ${IMAGE_NAME}:${IMAGE_TAG} .
 
-docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${IMAGE_NAME}:latest
-                """
+        stage('Build Backend Docker Image') {
+            steps {
+
+                sh '''
+                    docker build \
+                      -f docker/Dockerfile \
+                      -t ${BACKEND_IMAGE}:${IMAGE_TAG} \
+                      -t ${BACKEND_IMAGE}:latest \
+                      .
+                '''
             }
         }
+
+
+        stage('Build NGINX Docker Image') {
+            steps {
+
+                sh '''
+                    docker build \
+                      -f nginx/Dockerfile \
+                      -t ${NGINX_IMAGE}:${IMAGE_TAG} \
+                      -t ${NGINX_IMAGE}:latest \
+                      .
+                '''
+            }
+        }
+
 
         stage('Trivy Scan') {
             steps {
-                sh """
-trivy image \
---exit-code 0 \
---severity HIGH,CRITICAL \
-${IMAGE_NAME}:${IMAGE_TAG}
-                """
+
+                sh '''
+                    echo "===== Backend Image Scan ====="
+
+                    trivy image \
+                      --exit-code 0 \
+                      --severity HIGH,CRITICAL \
+                      ${BACKEND_IMAGE}:${IMAGE_TAG}
+
+
+                    echo "===== NGINX Image Scan ====="
+
+                    trivy image \
+                      --exit-code 0 \
+                      --severity HIGH,CRITICAL \
+                      ${NGINX_IMAGE}:${IMAGE_TAG}
+                '''
             }
         }
 
+
         stage('Push to Docker Hub') {
             steps {
+
                 withCredentials([
                     usernamePassword(
                         credentialsId: 'dockerhub-credentials',
@@ -141,56 +145,88 @@ ${IMAGE_NAME}:${IMAGE_TAG}
                         passwordVariable: 'DOCKER_PASSWORD'
                     )
                 ]) {
+
                     sh '''
-echo "$DOCKER_PASSWORD" | docker login \
---username "$DOCKER_USERNAME" \
---password-stdin
+                        echo "$DOCKER_PASSWORD" | docker login \
+                          --username "$DOCKER_USERNAME" \
+                          --password-stdin
 
-docker push ${IMAGE_NAME}:${IMAGE_TAG}
-docker push ${IMAGE_NAME}:latest
+                        echo "===== Push Backend ====="
 
-docker logout
+                        docker push ${BACKEND_IMAGE}:${IMAGE_TAG}
+                        docker push ${BACKEND_IMAGE}:latest
+
+
+                        echo "===== Push NGINX ====="
+
+                        docker push ${NGINX_IMAGE}:${IMAGE_TAG}
+                        docker push ${NGINX_IMAGE}:latest
+
+
+                        docker logout
                     '''
                 }
             }
         }
 
+
         stage('Deploy') {
             steps {
+
                 script {
-                    def target = params.DEPLOY_TARGET == "HOMELAB" ?
-                        "ubuntu@${HOMELAB_HOST}" :
-                        "ubuntu@${VPS_HOST}"
+
+                    def target = params.DEPLOY_TARGET == 'HOMELAB' ?
+                                 "ubuntu@${HOMELAB_HOST}" :
+                                 "ubuntu@${VPS_HOST}"
 
                     sh """
-ssh -o StrictHostKeyChecking=no ${target} '
-set -e
+                        ssh -o StrictHostKeyChecking=no ${target} '
+                            set -e
 
-echo "===== Navigate to Colorboard ====="
-cd ~/colorboard
+                            echo "======================================"
+                            echo "Colorboard Deployment"
+                            echo "======================================"
 
-echo "===== Pull latest backend image ====="
-docker compose pull backend
+                            cd /home/ubuntu/colorboard
 
-echo "===== Deploy Colorboard stack ====="
-docker compose up -d
+                            echo "===== Pull latest images ====="
 
-echo "===== Deployment status ====="
-docker compose ps
-'
+                            docker compose pull
+
+
+                            echo "===== Start Colorboard ====="
+
+                            docker compose up -d
+
+
+                            echo "===== Deployment Status ====="
+
+                            docker compose ps
+
+
+                            echo "===== Container Status ====="
+
+                            docker ps --filter name=colorboard
+                        '
                     """
                 }
             }
         }
     }
 
+
     post {
+
         success {
-            echo "Deployment successful to ${params.DEPLOY_TARGET}"
+            echo "======================================"
+            echo "Deployment successful"
+            echo "Target: ${params.DEPLOY_TARGET}"
+            echo "Build: ${BUILD_NUMBER}"
+            echo "======================================"
         }
 
         failure {
-            echo "Pipeline failed. Check logs for details."
+            echo "Pipeline failed. Check the logs."
         }
 
         always {
