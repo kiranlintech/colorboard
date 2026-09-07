@@ -300,16 +300,16 @@ jobs:
       # 15. SETUP SSH KEY
       # ==========================================
 
-      - name: Setup SSH Key
-        if: |
-          github.event_name == 'workflow_dispatch' &&
-          github.event.inputs.skip_deploy != 'true'
-        run: |
-          mkdir -p ~/.ssh
+      # - name: Setup SSH Key
+      #   if: |
+      #     github.event_name == 'workflow_dispatch' &&
+      #     github.event.inputs.skip_deploy != 'true'
+      #   run: |
+      #     mkdir -p ~/.ssh
 
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+      #     echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
 
-          chmod 600 ~/.ssh/id_rsa
+      #     chmod 600 ~/.ssh/id_rsa
 
 
       # ==========================================
