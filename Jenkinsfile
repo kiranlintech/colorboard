@@ -18,21 +18,20 @@ pipeline {
     }
 
     stages {
-
         stage('Checkout') {
             steps {
                 git branch: 'main',
                     url: 'https://github.com/kiranlintech/colorboard.git'
 
                 sh '''
-                    echo "===== WORKSPACE ====="
-                    pwd
+echo "===== WORKSPACE ====="
+pwd
 
-                    echo "===== PROJECT STRUCTURE ====="
-                    find . -maxdepth 4 -type f | sort
+echo "===== PROJECT STRUCTURE ====="
+find . -maxdepth 4 -type f | sort
 
-                    echo "===== POM FILES ====="
-                    find . -name "pom.xml" -type f
+echo "===== POM FILES ====="
+find . -name "pom.xml" -type f
                 '''
             }
         }
@@ -99,10 +98,10 @@ pipeline {
                     dir(pomDir) {
                         withSonarQubeEnv('sonarqube') {
                             sh '''
-                                mvn sonar:sonar \
-                                    -Dsonar.projectKey=colorboard \
-                                    -Dsonar.projectName=colorboard \
-                                    -Dsonar.exclusions=assets/**
+mvn sonar:sonar \
+-Dsonar.projectKey=colorboard \
+-Dsonar.projectName=colorboard \
+-Dsonar.exclusions=assets/**
                             '''
                         }
                     }
@@ -113,11 +112,11 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 sh """
-                    docker build \
-                    -f docker/Dockerfile \
-                    -t ${IMAGE_NAME}:${IMAGE_TAG} .
+docker build \
+-f docker/Dockerfile \
+-t ${IMAGE_NAME}:${IMAGE_TAG} .
 
-                    docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${IMAGE_NAME}:latest
+docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${IMAGE_NAME}:latest
                 """
             }
         }
@@ -125,10 +124,10 @@ pipeline {
         stage('Trivy Scan') {
             steps {
                 sh """
-                    trivy image \
-                    --exit-code 0 \
-                    --severity HIGH,CRITICAL \
-                    ${IMAGE_NAME}:${IMAGE_TAG}
+trivy image \
+--exit-code 0 \
+--severity HIGH,CRITICAL \
+${IMAGE_NAME}:${IMAGE_TAG}
                 """
             }
         }
@@ -143,14 +142,14 @@ pipeline {
                     )
                 ]) {
                     sh '''
-                        echo "$DOCKER_PASSWORD" | docker login \
-                            --username "$DOCKER_USERNAME" \
-                            --password-stdin
+echo "$DOCKER_PASSWORD" | docker login \
+--username "$DOCKER_USERNAME" \
+--password-stdin
 
-                        docker push ${IMAGE_NAME}:${IMAGE_TAG}
-                        docker push ${IMAGE_NAME}:latest
+docker push ${IMAGE_NAME}:${IMAGE_TAG}
+docker push ${IMAGE_NAME}:latest
 
-                        docker logout
+docker logout
                     '''
                 }
             }
@@ -159,34 +158,33 @@ pipeline {
         stage('Deploy') {
             steps {
                 script {
-
                     def target = params.DEPLOY_TARGET == "HOMELAB" ?
-                         "ubuntu@${HOMELAB_HOST}" :
-                         "ubuntu@${VPS_HOST}"
+                        "ubuntu@${HOMELAB_HOST}" :
+                        "ubuntu@${VPS_HOST}"
 
                     sh """
-                        ssh -o StrictHostKeyChecking=no ${target} '
-                        set -e
+ssh -o StrictHostKeyChecking=no ${target} '
+set -e
 
-                        echo "===== Navigate to Colorboard ====="
-                            cd ~/colorboard
+echo "===== Navigate to Colorboard ====="
+cd ~/colorboard
 
-                        echo "===== Pull latest backend image ====="
-                            docker compose pull backend
+echo "===== Pull latest backend image ====="
+docker compose pull backend
 
-                        echo "===== Deploy Colorboard stack ====="
-                            docker compose up -d
+echo "===== Deploy Colorboard stack ====="
+docker compose up -d
 
-                        echo "===== Deployment status ====="
-                            docker compose ps
-                            '
+echo "===== Deployment status ====="
+docker compose ps
+'
                     """
-                    }
                 }
             }
+        }
+    }
 
     post {
-
         success {
             echo "Deployment successful to ${params.DEPLOY_TARGET}"
         }
