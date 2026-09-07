@@ -1,4 +1,4 @@
-```yaml
+
 name: ColorBoard CI/CD Pipeline
 
 on:
@@ -484,4 +484,4 @@ jobs:
           docker image prune -f || true
 
           rm -f ~/.ssh/id_rsa || true
-```
+
