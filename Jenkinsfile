@@ -91,7 +91,6 @@ pipeline {
                     docker build \
                       -f docker/Dockerfile \
                       -t ${BACKEND_IMAGE}:${IMAGE_TAG} \
-                      -t ${BACKEND_IMAGE}:latest \
                       .
                 '''
             }
@@ -105,8 +104,7 @@ pipeline {
                     docker build \
                       -f nginx/Dockerfile \
                       -t ${NGINX_IMAGE}:${IMAGE_TAG} \
-                      -t ${NGINX_IMAGE}:latest \
-                      .
+                     .
                 '''
             }
         }
@@ -154,15 +152,11 @@ pipeline {
                         echo "===== Push Backend ====="
 
                         docker push ${BACKEND_IMAGE}:${IMAGE_TAG}
-                        docker push ${BACKEND_IMAGE}:latest
-
-
+                        
                         echo "===== Push NGINX ====="
 
                         docker push ${NGINX_IMAGE}:${IMAGE_TAG}
-                        docker push ${NGINX_IMAGE}:latest
-
-
+                        
                         docker logout
                     '''
                 }
