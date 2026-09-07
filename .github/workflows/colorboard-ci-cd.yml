@@ -31,7 +31,7 @@ concurrency:
 env:
   APP_NAME: colorboard
   IMAGE_NAME: kiranlintech/colorboard
-  DOCKERFILE: backend/Dockerfile
+  DOCKERFILE: docker/Dockerfile
 
   HOMELAB_HOST: ${{ secrets.HOMELAB_HOST }}
   VPS_HOST: ${{ secrets.VPS_HOST }}
