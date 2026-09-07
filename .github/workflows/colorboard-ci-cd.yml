@@ -7,6 +7,15 @@ on:
 
   workflow_dispatch:
     inputs:
+      deploy_target:
+        description: "Select deployment target"
+        required: true
+        type: choice
+        options:
+          - HOMELAB
+          - VPS
+        default: VPS
+
       skip_deploy:
         description: "Build and scan only. Do not deploy."
         required: true
@@ -23,6 +32,7 @@ env:
   IMAGE_NAME: kiranlintech/colorboard
   DOCKERFILE: docker/Dockerfile
 
+  HOMELAB_HOST: ${{ secrets.HOMELAB_HOST }}
   VPS_HOST: ${{ secrets.VPS_HOST }}
 
   SONAR_PROJECT_KEY: colorboard
@@ -269,7 +279,38 @@ jobs:
 
 
       # ==========================================
-      # 14. SETUP SSH KEY
+      # 14. SELECT DEPLOYMENT TARGET
+      # ==========================================
+
+      - name: Select Deployment Host
+        if: |
+          github.event_name == 'workflow_dispatch' &&
+          github.event.inputs.skip_deploy != 'true'
+        run: |
+
+          echo "=========================================="
+          echo "SELECTING DEPLOYMENT TARGET"
+          echo "=========================================="
+
+          if [ "${{ github.event.inputs.deploy_target }}" = "HOMELAB" ]; then
+
+            echo "DEPLOY_TARGET=HOMELAB" >> $GITHUB_ENV
+            echo "DEPLOY_HOST=${HOMELAB_HOST}" >> $GITHUB_ENV
+
+            echo "Deployment Target: HOMELAB"
+
+          else
+
+            echo "DEPLOY_TARGET=VPS" >> $GITHUB_ENV
+            echo "DEPLOY_HOST=${VPS_HOST}" >> $GITHUB_ENV
+
+            echo "Deployment Target: VPS"
+
+          fi
+
+
+      # ==========================================
+      # 15. SETUP SSH KEY
       # ==========================================
 
       - name: Setup SSH Key
@@ -277,6 +318,7 @@ jobs:
           github.event_name == 'workflow_dispatch' &&
           github.event.inputs.skip_deploy != 'true'
         run: |
+
           echo "=========================================="
           echo "SETTING UP SSH"
           echo "=========================================="
@@ -291,7 +333,7 @@ jobs:
 
 
       # ==========================================
-      # 15. DEPLOY APPLICATION
+      # 16. DEPLOY APPLICATION
       # ==========================================
 
       - name: Deploy Application
@@ -304,15 +346,16 @@ jobs:
           echo "DEPLOYING COLORBOARD"
           echo "=========================================="
 
-          echo "Target Host: ${VPS_HOST}"
-          echo "Image      : ${IMAGE_NAME}:${IMAGE_TAG}"
+          echo "Deployment Target: ${DEPLOY_TARGET}"
+          echo "Target Host      : ${DEPLOY_HOST}"
+          echo "Image            : ${IMAGE_NAME}:${IMAGE_TAG}"
 
           ssh \
             -i ~/.ssh/id_rsa \
             -o BatchMode=yes \
             -o ConnectTimeout=10 \
             -o StrictHostKeyChecking=no \
-            ${{ secrets.SSH_USER }}@${VPS_HOST} << EOF
+            ${{ secrets.SSH_USER }}@${DEPLOY_HOST} << EOF
 
               set -e
 
@@ -346,7 +389,7 @@ jobs:
 
 
       # ==========================================
-      # 16. DEPLOYMENT HEALTH CHECK
+      # 17. DEPLOYMENT HEALTH CHECK
       # ==========================================
 
       - name: Deployment Health Check
@@ -364,7 +407,7 @@ jobs:
             -o BatchMode=yes \
             -o ConnectTimeout=10 \
             -o StrictHostKeyChecking=no \
-            ${{ secrets.SSH_USER }}@${VPS_HOST} << EOF
+            ${{ secrets.SSH_USER }}@${DEPLOY_HOST} << EOF
 
               set -e
 
@@ -393,7 +436,7 @@ jobs:
 
 
       # ==========================================
-      # 17. SMOKE TEST
+      # 18. SMOKE TEST
       # ==========================================
 
       - name: Smoke Test
@@ -411,7 +454,7 @@ jobs:
             -o BatchMode=yes \
             -o ConnectTimeout=10 \
             -o StrictHostKeyChecking=no \
-            ${{ secrets.SSH_USER }}@${VPS_HOST} << EOF
+            ${{ secrets.SSH_USER }}@${DEPLOY_HOST} << EOF
 
               echo "Testing ColorBoard application..."
 
@@ -436,7 +479,7 @@ jobs:
 
 
       # ==========================================
-      # 18. SUCCESS
+      # 19. SUCCESS
       # ==========================================
 
       - name: Deployment Successful
@@ -450,11 +493,23 @@ jobs:
           echo "Application : ${APP_NAME}"
           echo "Image       : ${IMAGE_NAME}:${IMAGE_TAG}"
 
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && \
+             [ "${{ github.event.inputs.skip_deploy }}" != "true" ]; then
+
+            echo "Target      : ${DEPLOY_TARGET}"
+            echo "Host        : ${DEPLOY_HOST}"
+
+          else
+
+            echo "Deployment  : SKIPPED"
+
+          fi
+
           echo "=========================================="
 
 
       # ==========================================
-      # 19. FAILURE
+      # 20. FAILURE
       # ==========================================
 
       - name: Pipeline Failed
@@ -468,13 +523,17 @@ jobs:
           echo "Build       : ${{ github.run_number }}"
           echo "Application : ${APP_NAME}"
 
+          if [ -n "${DEPLOY_TARGET}" ]; then
+            echo "Target      : ${DEPLOY_TARGET}"
+          fi
+
           echo "Check GitHub Actions logs for details."
 
           echo "=========================================="
 
 
       # ==========================================
-      # 20. CLEANUP
+      # 21. CLEANUP
       # ==========================================
 
       - name: Cleanup
