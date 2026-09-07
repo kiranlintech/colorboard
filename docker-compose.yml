@@ -34,7 +34,7 @@ services:
 
 
   backend:
-    image: kiranlintech/colorboard:latest
+    image: kiranlintech/colorboard:${COLORBOARD_TAG}
     container_name: colorboard-backend
     restart: unless-stopped
 
@@ -52,7 +52,7 @@ services:
 
 
   nginx:
-    image: kiranlintech/colorboard-nginx:latest
+    image: kiranlintech/colorboard-nginx:${COLORBOARD_TAG}
     container_name: colorboard-nginx
     restart: unless-stopped
 
