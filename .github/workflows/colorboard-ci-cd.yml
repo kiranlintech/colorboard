@@ -363,27 +363,17 @@ jobs:
               echo "REMOTE DEPLOYMENT"
               echo "=========================================="
 
-              echo "Pulling image..."
+              cd ~/colorboard
 
-              docker pull ${IMAGE_NAME}:${IMAGE_TAG}
+              echo "Pulling ColorBoard images..."
 
-              echo "Stopping old container..."
+              COLORBOARD_TAG=${IMAGE_TAG} docker compose pull
 
-              docker stop ${APP_NAME} || true
+              echo "Starting ColorBoard application..."
 
-              echo "Removing old container..."
+              COLORBOARD_TAG=${IMAGE_TAG} docker compose up -d
 
-              docker rm ${APP_NAME} || true
-
-              echo "Starting new container..."
-
-              docker run -d \
-                --name ${APP_NAME} \
-                --restart unless-stopped \
-                -p 8087:8080 \
-                ${IMAGE_NAME}:${IMAGE_TAG}
-
-              echo "New container started."
+              echo "Docker Compose deployment completed."
 
           EOF
 
@@ -411,26 +401,21 @@ jobs:
 
               set -e
 
-              echo "Checking container..."
+              cd ~/colorboard
 
-              docker ps \
-                --filter "name=${APP_NAME}"
+              echo "Checking ColorBoard containers..."
 
-              if [ "\$(docker inspect -f '{{.State.Running}}' ${APP_NAME})" != "true" ]; then
+              docker compose ps
 
-                echo "ERROR: Container is not running."
+              echo ""
+              echo "Checking required containers..."
 
-                echo "=========================================="
-                echo "CONTAINER LOGS"
-                echo "=========================================="
+              docker inspect -f '{{.State.Status}}' colorboard-mysql
+              docker inspect -f '{{.State.Status}}' colorboard-backend
+              docker inspect -f '{{.State.Status}}' colorboard-nginx
 
-                docker logs ${APP_NAME} || true
-
-                exit 1
-
-              fi
-
-              echo "Container is running successfully."
+              echo ""
+              echo "ColorBoard containers are running."
 
           EOF
 
@@ -456,7 +441,7 @@ jobs:
             -o StrictHostKeyChecking=no \
             ${{ secrets.SSH_USER }}@${DEPLOY_HOST} << EOF
 
-              echo "Testing ColorBoard application..."
+              echo "Testing ColorBoard application through NGINX..."
 
               curl -f \
                 --max-time 10 \
@@ -465,10 +450,24 @@ jobs:
                   echo "ERROR: ColorBoard smoke test failed."
 
                   echo "=========================================="
-                  echo "CONTAINER LOGS"
+                  echo "DOCKER COMPOSE STATUS"
                   echo "=========================================="
 
-                  docker logs ${APP_NAME} || true
+                  cd ~/colorboard
+
+                  docker compose ps
+
+                  echo "=========================================="
+                  echo "BACKEND LOGS"
+                  echo "=========================================="
+
+                  docker logs colorboard-backend || true
+
+                  echo "=========================================="
+                  echo "NGINX LOGS"
+                  echo "=========================================="
+
+                  docker logs colorboard-nginx || true
 
                   exit 1
               }
