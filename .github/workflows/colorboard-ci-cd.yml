@@ -87,16 +87,16 @@ jobs:
           java-version: "21"
           cache: maven
 
-      - name: Verify Java setup
+      - name: Verify Java and Maven setup
         run: |
           echo "JAVA_HOME=$JAVA_HOME"
-          which java
+          echo "PATH=$PATH"
+          echo "Java:"
           java -version
+          echo "Javac:"
           javac -version
-
-      - name: Build application
-        working-directory: backend
-        run: mvn clean package    
+          echo "Maven:"
+          mvn -version    
 
 
       # ==========================================
