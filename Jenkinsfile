@@ -161,30 +161,29 @@ pipeline {
                 script {
 
                     def target = params.DEPLOY_TARGET == "HOMELAB" ?
-                                 "ubuntu@${HOMELAB_HOST}" :
-                                 "ubuntu@${VPS_HOST}"
+                         "ubuntu@${HOMELAB_HOST}" :
+                         "ubuntu@${VPS_HOST}"
 
                     sh """
-                    ssh -o StrictHostKeyChecking=no ${target} '
+                        ssh -o StrictHostKeyChecking=no ${target} '
+                        set -e
 
-                        docker pull ${IMAGE_NAME}:latest
+                        echo "===== Navigate to Colorboard ====="
+                            cd ~/colorboard
 
-                        docker stop colorboard || true
-                        docker rm colorboard || true
+                        echo "===== Pull latest backend image ====="
+                            docker compose pull backend
 
-                        docker image prune -f
+                        echo "===== Deploy Colorboard stack ====="
+                            docker compose up -d
 
-                        docker run -d \
-                          --name colorboard \
-                          --restart unless-stopped \
-                          -p 8087:8080 \
-                          ${IMAGE_NAME}:latest
-                    '
+                        echo "===== Deployment status ====="
+                            docker compose ps
+                            '
                     """
+                    }
                 }
             }
-        }
-    }
 
     post {
 
