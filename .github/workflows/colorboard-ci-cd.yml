@@ -233,7 +233,7 @@ jobs:
             -f ${DOCKERFILE} \
             -t ${IMAGE_NAME}:${IMAGE_TAG} \
             -t ${IMAGE_NAME}:latest \
-            backend
+            .
 
           docker images ${IMAGE_NAME}
 
