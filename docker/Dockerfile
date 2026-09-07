@@ -8,20 +8,14 @@ RUN mvn -q -DskipTests dependency:go-offline
 
 COPY backend/src ./src
 
-RUN mvn -q -DskipTests package
-
-# Find the generated application JAR and give it a fixed name
-RUN find target -maxdepth 1 -type f \
-    -name "*.jar" \
-    ! -name "*.original" \
-    -exec cp {} /app/app.jar \;
+RUN mvn -q clean package -DskipTests
 
 
-FROM eclipse-temurin:21-jre-jammy
+FROM eclipse-temurin:21-jre
 
 WORKDIR /app
 
-COPY --from=build /app/app.jar app.jar
+COPY --from=build /app/target/*.jar app.jar
 
 EXPOSE 8080
 
