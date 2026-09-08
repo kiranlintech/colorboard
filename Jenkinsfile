@@ -171,7 +171,7 @@ pipeline {
 
                     def target = params.DEPLOY_TARGET == 'HOMELAB' ?
                                  "ubuntu@${HOMELAB_HOST}" :
-                                 "ubuntu@${VPS_HOST}"
+                                 "deploy@${VPS_HOST}"
 
                     sh """
                         ssh -o StrictHostKeyChecking=no ${target} '
